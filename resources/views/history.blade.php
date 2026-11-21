@@ -10,12 +10,14 @@
 <body class="review-page">
 <header><strong>GitoBob</strong><a href="{{ route('repository', ['repo' => $relative]) }}">{{ $name }}</a><a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
 <main class="repository-review">
-    @php($query = ['repo' => $relative, 'tip' => $tip, 'path' => $path !== '' ? $path : null])
+    @php($query = ['repo' => $relative, 'tip' => $tip, 'path' => $path !== '' ? $path : null] + request()->only('comparison', 'return_file', 'return_page'))
     <section class="heading">
         <div><h1>{{ $commit ? 'Commit details' : ($path !== '' ? 'File history' : 'History') }}</h1>
             <p class="repository-meta">{{ $name }}@if ($path !== '') · {{ $path }}@elseif ($tip) · History through {{ substr($tip, 0, 8) }}@endif</p>
         </div>
-        @if ($commit)<a class="button-link" href="{{ route('repository.history', $query + ['page' => $page]) }}">{{ $path !== '' ? 'Back to file history' : 'Back to history' }}</a>@endif
+        @if ($commit && request()->filled('comparison'))
+            <a class="button-link" href="{{ route('repository.compare', ['repo' => $relative, 'comparison' => request()->query('comparison'), 'tab' => 'commits', 'file' => request()->query('return_file'), 'page' => request()->integer('return_page', 1)]) }}">Back to comparison</a>
+        @elseif ($commit)<a class="button-link" href="{{ route('repository.history', $query + ['page' => $page]) }}">{{ $path !== '' ? 'Back to file history' : 'Back to history' }}</a>@endif
     </section>
     @if ($detail !== null)
         <section class="panel sync-detail" aria-label="Changed files">

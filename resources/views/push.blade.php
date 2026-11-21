@@ -10,13 +10,15 @@
 <body class="review-page">
 <header><strong>GitoBob</strong><a href="{{ route('repository', ['repo' => $relative]) }}">{{ $name }}</a><a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
 <main class="repository-review">
-    @php($comparison = ['repo' => $relative, 'review' => $version])
+    @php($return = request()->only('comparison', 'file_back', 'tab', 'page'))
+    @php($comparison = ['repo' => $relative, 'review' => $version] + $return)
     <section class="heading">
         <div><h1>{{ $commit ? 'Commit details' : 'Branch sync' }}</h1><p class="repository-meta">{{ $name }} · {{ $branch }}</p></div>
+        @if (isset($return['comparison']))<a class="button-link" href="{{ route('repository.compare', ['repo' => $relative, 'file' => $return['file_back'] ?? null] + $return) }}">Back to comparison</a>@endif
         @if ($commit)
             <a class="button-link" href="{{ route('repository.push.preview', $comparison) }}">Back to branch sync</a>
         @else
-            <a class="button-link" href="{{ route('repository.push.preview', ['repo' => $relative, 'remote' => $remote ?: null]) }}">Refresh</a>
+            <a class="button-link" href="{{ route('repository.push.preview', ['repo' => $relative, 'remote' => $remote ?: null] + $return) }}">Refresh</a>
         @endif
     </section>
     @if (session('notice') && session('notice') !== $message)<p class="action-notice" role="status">{{ session('notice') }}</p>@endif
@@ -33,6 +35,7 @@
         @if (count($remotes) > 1)
             <form class="cloud-row publish-remote" method="get" action="{{ route('repository.push.preview') }}">
                 <input type="hidden" name="repo" value="{{ $relative }}">
+                @foreach ($return as $key => $value)<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endforeach
                 <label for="publish-remote">Remote</label>
                 <select id="publish-remote" name="remote">@foreach ($remotes as $option)<option @selected($option === $remote)>{{ $option }}</option>@endforeach</select>
                 <button>Preview destination</button>
@@ -59,7 +62,7 @@
         @if ($canFetch || $canPush || $canPublish)
             <div class="sync-actions">
                 @foreach (array_filter(['publish' => $canPublish ? 'Publish branch' : null, 'fetch' => $canFetch ? 'Fetch' : null, 'push' => $canPush ? 'Push to '.$remote.'/'.$target : null, 'pull' => $relation === 'behind' ? 'Pull (fast-forward)' : null]) as $action => $label)
-                    <form method="post" action="{{ route('repository.'.$action, ['repo' => $relative]) }}">
+                    <form method="post" action="{{ route('repository.'.$action, ['repo' => $relative] + $return) }}">
                         @if ($action === 'publish')<input type="hidden" name="remote" value="{{ $remote }}">@endif
                         @csrf
                         <input type="hidden" name="version" value="{{ $version }}">

@@ -47,7 +47,8 @@
                     <h2>Changes</h2>
                 @endif
                 <div class="review-actions">
-                    @unless ($allChanges)<a class="button-link" href="{{ route('repository.history', $query) }}">History</a>
+                    @unless ($allChanges)<a class="button-link" href="{{ route('repository.compare', $query) }}">Compare</a>
+                    <a class="button-link" href="{{ route('repository.history', $query) }}">History</a>
                     <a class="button-link" href="{{ route('repository.stashes', $query) }}">Stashes</a>@endunless
                     @if (! $allChanges && ! session('committed'))
                         <a class="button-link" href="{{ route('repository.push.preview', $query) }}">Sync…</a>

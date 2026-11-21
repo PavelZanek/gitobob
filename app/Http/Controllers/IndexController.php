@@ -130,7 +130,7 @@ final class IndexController extends Controller
         $data = $request->validate(['version' => ['required', 'string', 'size:64'], 'remote' => ['sometimes', 'string']]);
         $result = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
             fn (): array => $push->publish($directory, $data['version'], $data['remote'] ?? ''));
-        $back = to_route('repository.push.preview', $request->only('repo', 'remote'))->with('notice', $result['notice']);
+        $back = to_route('repository.push.preview', $request->only('repo', 'remote', 'comparison', 'file_back', 'tab', 'page'))->with('notice', $result['notice']);
         if ($result['compareUrl'] !== null) {
             $key = hash('sha256', $directory.$result['compareUrl']);
             $request->session()->put('publishedComparison', ['directory' => $directory, 'key' => $key, 'url' => $result['compareUrl']]);
@@ -165,6 +165,6 @@ final class IndexController extends Controller
             $scanner->forgetWorkspace();
         }
 
-        return to_route('repository.push.preview', $request->only('repo', 'remote'))->with('notice', $notice);
+        return to_route('repository.push.preview', $request->only('repo', 'remote', 'comparison', 'file_back', 'tab', 'page'))->with('notice', $notice);
     }
 }

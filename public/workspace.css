@@ -219,3 +219,8 @@ header .app-modes + .settings-link { margin-left: 0; }
 .conflict-sides section + section { border-left: 1px solid var(--line); }
 .conflict-sides pre, .conflict-result { margin: 0; padding: 10px 14px; max-height: 30vh; overflow: auto; font: 12px/1.55 var(--mono); tab-size: 4; }
 @media (max-width: 650px) { .conflict-sides { grid-template-columns: 1fr; } }
+.compare-picker, .compare-action, .comparison-destination { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.compare-picker { justify-content: flex-start; }
+.compare-picker select { max-width: min(36vw, 30em); }
+.compare-action { min-height: 44px; }
+.compare-action [data-cloud-status], .comparison-destination span { color: var(--muted); font-size: 13px; }

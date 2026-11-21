@@ -47,6 +47,24 @@ final class GitHubClient
         return is_string($slug) && preg_match('~^'.self::REPOSITORY.'$~D', $slug) ? $slug : null;
     }
 
+    public function matchingPull(string $repository, string $base, string $source, string $head): ?int
+    {
+        $query = http_build_query(['state' => 'open', 'base' => $base, 'head' => explode('/', $source)[0].':'.$head, 'per_page' => 100]);
+        $rows = $this->read('repos/'.$repository.'/pulls?'.$query, 'map({number, source:.head.repo.full_name})');
+        foreach ($rows as $row) {
+            if (strcasecmp($row['source'] ?? '', $source) === 0) {
+                return (int) $row['number'];
+            }
+        }
+
+        return null;
+    }
+
+    public function branchTip(string $repository, string $branch): ?string
+    {
+        return $this->read('repos/'.$repository.'/branches/'.rawurlencode($branch), '[.commit.sha]', false, true)[0] ?? null;
+    }
+
     public function configuredAccount(): ?string
     {
         // Environment tokens can override the account selected in gh's local config.
@@ -140,7 +158,7 @@ final class GitHubClient
     }
 
     /** @return list<mixed> */
-    private function read(string $endpoint, string $projection, bool $paginate = true): array
+    private function read(string $endpoint, string $projection, bool $paginate = true, bool $allowMissing = false): array
     {
         try {
             $command = [$this->binary(), 'api', '--hostname', 'github.com', '--method', 'GET'];
@@ -154,6 +172,9 @@ final class GitHubClient
         }
         if (! $result->successful()) {
             $error = strtolower($result->errorOutput());
+            if ($allowMissing && str_contains($error, 'http 404')) {
+                return [];
+            }
             [$message, $status] = match (true) {
                 $result->exitCode() === 127 => ['Install GitHub CLI (gh) on your Mac, then sign in with gh auth login.', 401],
                 str_contains($error, 'auth login'), str_contains($error, '401'), str_contains($error, 'bad credentials') => ['Sign in to GitHub CLI on this Mac with gh auth login, then refresh.', 401],
