@@ -62,17 +62,17 @@ final class RepositoryScanner
         $key = $this->key($root, $depth);
 
         return Cache::lock('workspace-scan-lock:'.$key, 120)->block(60, function () use ($root, $reuse, $opening, $token, $key, $depth): array {
-            $active = 'workspace-scan:'.$key;
+            $active = 'workspace-scan-dfs:'.$key;
             $snapshot = 'workspace-tree-v2:'.$key;
             $scan = Cache::get($active);
             if ($token !== null) {
                 if (! is_array($scan) && ($cached = Cache::get($snapshot)) && ($cached['token'] ?? null) === $token) {
-                    return ['tree' => $cached['tree'], 'token' => null, 'count' => 0];
+                    return ['tree' => $cached['tree'], 'token' => null, 'count' => $cached['tree']?->repositoryCount() ?? 0];
                 }
                 abort_unless(is_array($scan) && $scan['token'] === $token, 409);
             } elseif ($reuse || $opening) {
                 if (! is_array($scan) && is_array($cached = Cache::get($snapshot))) {
-                    return ['tree' => $cached['tree'], 'token' => null, 'count' => 0];
+                    return ['tree' => $cached['tree'], 'token' => null, 'count' => $cached['tree']?->repositoryCount() ?? 0];
                 }
             } else {
                 $scan = null;
@@ -103,7 +103,7 @@ final class RepositoryScanner
         if (is_string($root)) {
             $key = $this->key($root, Preferences::read()->depth);
             Cache::forget('workspace-tree-v2:'.$key);
-            Cache::forget('workspace-scan:'.$key);
+            Cache::forget('workspace-scan-dfs:'.$key);
         }
     }
 
@@ -133,9 +133,8 @@ final class RepositoryScanner
 
             return;
         }
-        $offset = 0;
-        while (isset($pending[$offset])) {
-            $relative = $pending[$offset++];
+        while ($pending !== []) {
+            $relative = array_pop($pending);
             $directory = $relative === '.' ? $root : rtrim($root, '/').'/'.$relative;
             if (realpath($directory) !== $directory) {
                 continue;
@@ -146,7 +145,10 @@ final class RepositoryScanner
             $level = $relative === '.' ? 0 : substr_count($relative, '/') + 1;
             if ($depth === null || $level < $depth) {
                 $lastLevel = $depth === $level + 1;
-                foreach (@scandir($directory, SCANDIR_SORT_NONE) ?: [] as $name) {
+                $entries = @scandir($directory, SCANDIR_SORT_NONE) ?: [];
+                // Pop folders in the same alphabetical depth-first order shown by the tree.
+                rsort($entries, SORT_STRING);
+                foreach ($entries as $name) {
                     $path = $directory.'/'.$name;
                     if (in_array($name, self::EXCLUDED, true) || ($lastLevel && ! file_exists($path.'/.git'))) {
                         continue;
@@ -161,6 +163,5 @@ final class RepositoryScanner
             }
         }
 
-        $pending = array_slice($pending, $offset);
     }
 }

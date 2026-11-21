@@ -47,8 +47,12 @@ summary { cursor: pointer; }
 .tree a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .tree a:hover { text-decoration: underline; }
 .tree small { margin-left: 6px; }
-.leaf { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.leaf a { flex: 1; }
+.tree summary, .tree .leaf { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.tree summary::-webkit-details-marker { display: none; }
+.tree summary::before, .tree .leaf::before { content: ''; flex: 0 0 10px; }
+.tree summary::before { content: '▸'; color: var(--muted); font-size: 11px; }
+.tree details[open] > summary::before { content: '▾'; }
+.tree summary > a, .tree .leaf > a { flex: 1; }
 .file-count { margin-left: 6px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .filter { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); font-size: 13px; text-decoration: none; }
 .filter::before { content: ""; width: 28px; height: 16px; border-radius: 10px; background: radial-gradient(circle at 8px center, white 5px, transparent 6px), var(--muted); }
@@ -171,7 +175,13 @@ header .app-modes { margin-left: auto; }
 .comment-box { margin-bottom: 12px; }
 .comment-box > summary { padding: 10px 16px; font-weight: 600; }
 
-.scan-status { margin: 14px 0 8px; color: var(--ink); font-weight: 600; }
+.scan-status { margin: 0; min-height: 32px; padding: 7px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+[data-all-changes][aria-disabled=true] { opacity: .6; }
+html:has([data-workspace-results]) { scrollbar-gutter: stable; }
+.workspace-list { min-height: 100px; display: flow-root; }
+.scan-placeholder { padding: 14px 20px; }
+.scan-placeholder i { display: block; width: min(38%, 180px); height: 9px; margin-block: 6px 14px; background: var(--line); border-radius: 3px; }
+.scan-placeholder i:nth-child(2) { margin-left: 18px; width: min(30%, 120px); }
 .scan-status span { margin-left: 8px; color: var(--muted); font-weight: 400; }
 
 :root[data-theme="light"] { color-scheme: light; }

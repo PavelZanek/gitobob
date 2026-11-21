@@ -10,8 +10,31 @@ let skeletonTimer;
 let neighborTimer;
 let workspaceRequest;
 
+// Each scan batch extends the previous tree in display order. Keep existing rows
+// connected so links retain focus and expanded or collapsed folders stay as chosen.
+function appendWorkspaceRows(list, nextList) {
+    for (const [index, item] of [...nextList.children].entries()) {
+        const current = list.children[index];
+        if (!current) {
+            list.append(item);
+            continue;
+        }
+        const nextBranch = item.firstElementChild;
+        if (nextBranch.tagName !== 'DETAILS') continue;
+        const branch = current.firstElementChild;
+        if (branch.tagName === 'DETAILS') {
+            appendWorkspaceRows(branch.lastElementChild, nextBranch.lastElementChild);
+        } else {
+            const focused = branch.contains(document.activeElement) ? document.activeElement : null;
+            nextBranch.firstElementChild.replaceChildren(...branch.childNodes);
+            branch.replaceWith(nextBranch);
+            focused?.focus({ preventScroll: true });
+        }
+    }
+}
+
 async function scanWorkspace() {
-    let results = document.querySelector('[data-scan-url]');
+    const results = document.querySelector('[data-scan-url]');
     if (!results) return;
     const controller = new AbortController();
     workspaceRequest = controller;
@@ -22,13 +45,22 @@ async function scanWorkspace() {
             if (controller.signal.aborted || !results.isConnected) return;
             if (!next) throw new Error('Workspace unavailable');
             if (next.dataset.scanUrl && next.dataset.repositoryCount === results.dataset.repositoryCount) continue;
-            const closed = new Set([...results.querySelectorAll('details:not([open])')].map(item => item.dataset.folder));
-            for (const item of next.querySelectorAll('details')) item.open = !closed.has(item.dataset.folder);
-            const focused = results.contains(document.activeElement) ? document.activeElement : null;
-            results.replaceWith(next);
-            results = next;
-            if (focused?.href) [...results.querySelectorAll('a')].find(link => link.href === focused.href)?.focus({ preventScroll: true });
-            if (focused?.tagName === 'SUMMARY') [...results.querySelectorAll('details')].find(item => item.dataset.folder === focused.parentElement.dataset.folder)?.querySelector('summary')?.focus({ preventScroll: true });
+            const list = results.querySelector('[data-workspace-list]');
+            const nextList = next.querySelector('[data-workspace-list]');
+            if (!nextList) {
+                results.replaceWith(next);
+                return;
+            }
+            const tree = list.querySelector('.tree');
+            const nextTree = nextList.querySelector('.tree');
+            if (tree && nextTree) appendWorkspaceRows(tree, nextTree);
+            else list.replaceChildren(...nextList.childNodes);
+            results.querySelector('.scan-status').replaceChildren(...next.querySelector('.scan-status').childNodes);
+            results.dataset.repositoryCount = next.dataset.repositoryCount;
+            if (!next.dataset.scanUrl) {
+                delete results.dataset.scanUrl;
+                results.querySelector('[data-all-changes]').replaceWith(next.querySelector('[data-all-changes]'));
+            }
         }
     } catch {
         if (controller.signal.aborted || !results.isConnected) return;

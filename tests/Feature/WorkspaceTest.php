@@ -1,6 +1,7 @@
 <?php
 
 use App\Git\RepositoryScanner;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
@@ -147,4 +148,27 @@ it('applies the saved search depth to the workspace tree and all changes', funct
     $this->get('/settings')->assertSee('data-theme="light"', false);
     $this->post('/settings', ['theme' => 'system', 'depth' => 5])->assertRedirect('/settings');
     $this->get('/settings')->assertSee('data-theme="system"', false);
+});
+
+it('discovers repositories in their final visible order across scan batches', function (): void {
+    $root = Storage::disk('local')->path('ordered');
+    foreach (['zulu', 'alpha/z-last', 'alpha', 'alpha/a-first'] as $relative) {
+        File::ensureDirectoryExists($root.'/'.$relative.'/.git');
+    }
+    $read = [];
+    Process::fake(function (PendingProcess $git) use (&$read, $root) {
+        $read[] = substr($git->path, strlen($root) + 1);
+
+        return Process::result(output: "# branch.head dev\0? note.md\0");
+    });
+    Storage::disk('local')->put('workspace.path', $root);
+    $page = $this->get('/?opening=1')->assertSee('All changes')->assertSee('aria-disabled="true"', false);
+    $order = ['alpha', 'alpha/a-first', 'alpha/z-last', 'zulu'];
+    while ($token = $page->viewData('token')) {
+        $page = $this->get('/?batch='.$token)->assertOk();
+        expect($read)->toBe(array_slice($order, 0, count($read)));
+    }
+    $page->assertSeeInOrder(['alpha</span>', 'a-first</span>', 'z-last</span>', 'zulu</span>'], false)->assertSee('4 found');
+    $this->get('/?snapshot=1')->assertSee('4 found');
+    expect($read)->toBe($order);
 });

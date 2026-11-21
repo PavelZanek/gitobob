@@ -52,6 +52,16 @@ final readonly class RepositoryFolder
         return $repositories;
     }
 
+    public function repositoryCount(): int
+    {
+        $count = $this->status !== null ? 1 : 0;
+        foreach ($this->children as $child) {
+            $count += $child->repositoryCount();
+        }
+
+        return $count;
+    }
+
     public function onlyChanged(): ?self
     {
         $children = [];
