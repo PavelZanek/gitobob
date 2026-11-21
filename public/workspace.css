@@ -214,3 +214,4 @@ header .app-modes + .settings-link { margin-left: 0; }
 .branch-tools input, .branch-create input, .publish-remote select { min-width: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font: inherit; }
 .branch-create input { width: 100%; }
 .publish-remote { display: flex; align-items: center; gap: 8px; }
+.branch-create input.stash-option { width: auto; }

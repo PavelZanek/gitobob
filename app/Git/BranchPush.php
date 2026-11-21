@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Process;
 
 /**
  * @phpstan-type Commits array{count:int, subjects:array<string, string>}
- * @phpstan-type Preview array{branch:string, remote:string, target:string, destination:string, head:string, message:string, version:string, local:Commits, incoming:Commits, relation:string, canFetch:bool, canPush:bool, canPublish:bool, publishMapping:string, remotes:list<string>, tracking:string, tip:string}
+ * @phpstan-type Preview array{branch:string, remote:string, target:string, destination:string, head:string, message:string, version:string, local:Commits, incoming:Commits, relation:string, canFetch:bool, canPush:bool, canPublish:bool, publishMapping:string, compareUrl:?string, remotes:list<string>, tracking:string, tip:string}
  */
 final class BranchPush
 {
@@ -27,7 +27,7 @@ final class BranchPush
         $review = ['branch' => str_starts_with($branch, 'refs/heads/') ? substr($branch, 11) : 'Detached HEAD',
             'remote' => '', 'target' => '', 'destination' => '', 'head' => $head, 'message' => '',
             'version' => '', 'local' => ['count' => 0, 'subjects' => []], 'incoming' => ['count' => 0, 'subjects' => []],
-            'relation' => '', 'canFetch' => false, 'canPush' => false, 'canPublish' => false, 'publishMapping' => '', 'remotes' => [], 'tracking' => '', 'tip' => ''];
+            'relation' => '', 'canFetch' => false, 'canPush' => false, 'canPublish' => false, 'publishMapping' => '', 'compareUrl' => null, 'remotes' => [], 'tracking' => '', 'tip' => ''];
         if ($branch === '' || $head === '') {
             return ['message' => 'Check out a branch with a commit to push.'] + $review;
         }
@@ -91,6 +91,9 @@ final class BranchPush
             }
             $review['tracking'] = $tracking;
             $review['version'] = hash('sha256', serialize(['publish', $directory, $branch, $head, $remote, $urls, $target, $mappings]));
+
+            $slug = GitHubClient::slug($urls);
+            $review['compareUrl'] = $slug === null ? null : 'https://github.com/'.$slug.'/compare/'.rawurlencode($review['target']).'?expand=1';
 
             return ['canPublish' => true, 'message' => 'Publish commit '.substr($head, 0, 8).' as a new branch on this remote.'] + $review;
         }
@@ -209,11 +212,12 @@ final class BranchPush
         return preg_replace('/^[^\/@:]+@/', '', $url) ?? '';
     }
 
-    public function publish(string $directory, string $version, string $remote): string
+    /** @return array{notice:string, compareUrl:?string} */
+    public function publish(string $directory, string $version, string $remote): array
     {
         $review = $this->preview($directory, $remote);
         if (! $review['canPublish'] || ! hash_equals($review['version'], $version)) {
-            return 'Publish stopped. Review the current branch and destination.';
+            return ['notice' => 'Publish stopped. Review the current branch and destination.', 'compareUrl' => null];
         }
 
         $ref = 'refs/heads/'.$review['target'];
@@ -225,18 +229,18 @@ final class BranchPush
             $result = $this->git($directory, [...$options, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no',
                 '--force-with-lease='.$ref.':', '--', $review['remote'], $review['head'].':'.$ref]);
         } catch (ProcessTimedOutException) {
-            return 'Publish timed out. Refresh to check whether the branch was created.';
+            return ['notice' => 'Publish timed out. Refresh to check whether the branch was created.', 'compareUrl' => null];
         }
         if (! $result->successful()) {
-            return 'Git rejected publication. Refresh to check the destination and your permissions.';
+            return ['notice' => 'Git rejected publication. Refresh to check the destination and your permissions.', 'compareUrl' => null];
         }
 
         $upstream = $review['remote'].'/'.$review['target'];
         $mapped = $mapping === '' || $this->git($directory, ['config', '--add', $config, $mapping])->successful();
         $tracked = $mapped && $this->git($directory, ['branch', '--set-upstream-to='.$review['tracking'], '--', $review['branch']])->successful();
 
-        return $tracked ? 'Published '.$upstream.' and set it as the upstream.'
-            : 'Published '.$upstream.'. Check the remote fetch mapping and set the upstream in Git.';
+        return ['compareUrl' => $review['compareUrl'], 'notice' => $tracked ? 'Published '.$upstream.' and set it as the upstream.'
+            : 'Published '.$upstream.'. Check the remote fetch mapping and set the upstream in Git.'];
     }
 
     public function send(string $directory, string $version): string

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
+use Native\Desktop\Facades\Shell;
 
 beforeEach(function (): void {
     Storage::fake('local');
@@ -167,4 +168,14 @@ it('refuses publication when the local tip moves or someone creates the destinat
     expect(($this->git)(['--git-dir=../remote.git', 'rev-parse', 'feature/new']))->toBe($this->base);
     ($this->git)(['switch', '--no-track', '-c', 'main']);
     $this->get($this->url)->assertSee('destination is protected')->assertDontSee('Publish branch');
+});
+
+it('only opens the comparison associated with this repository and the successful publication', function (): void {
+    $url = 'https://github.com/example/demo/compare/feature%2Fguide?expand=1';
+    $open = '/repository/publish/open?repo=demo';
+    $this->post($open, ['key' => 'missing'])->assertNotFound();
+    $this->withSession(['publishedComparison' => ['directory' => $this->repo, 'key' => 'selected', 'url' => $url]]);
+    Shell::shouldReceive('openExternal')->once()->with($url);
+    $this->post($open, ['key' => 'different'])->assertNotFound();
+    $this->post($open, ['key' => 'selected'])->assertNoContent();
 });

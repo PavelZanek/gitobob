@@ -20,6 +20,13 @@
         @endif
     </section>
     @if (session('notice') && session('notice') !== $message)<p class="action-notice" role="status">{{ session('notice') }}</p>@endif
+    @if (session('openComparison'))
+        <form method="post" action="{{ route('repository.publish.open', ['repo' => $relative]) }}">
+            @csrf
+            <input type="hidden" name="key" value="{{ session('openComparison') }}">
+            <button>Open pull request on GitHub…</button>
+        </form>
+    @endif
     @if (! $commit)
     <section class="panel" aria-label="Branch comparison">
         <div class="toolbar"><h2>{{ $target ? $remote.'/'.$target : 'Push destination' }}</h2></div>

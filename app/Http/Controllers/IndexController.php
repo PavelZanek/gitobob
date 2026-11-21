@@ -12,25 +12,13 @@ use App\Git\StagedCommit;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
+use Native\Desktop\Facades\Shell;
 use RuntimeException;
 
-final class IndexController
+final class IndexController extends Controller
 {
-    private function directory(Request $request, RepositoryScanner $scanner): string
-    {
-        abort_unless(in_array($request->getHost(), ['localhost', '127.0.0.1', '[::1]'], true)
-            && in_array($request->ip(), ['127.0.0.1', '::1'], true), 403);
-        $root = Storage::disk('local')->get('workspace.path');
-        $relative = $request->query('repo');
-        abort_unless(is_string($root) && is_string($relative), 404);
-        $path = $scanner->repositoryDirectory($root, $relative);
-        abort_if($path === null, 404);
-
-        return $path;
-    }
-
     public function branches(Request $request, RepositoryScanner $scanner, LocalBranches $branches): View
     {
         $directory = $this->directory($request, $scanner);
@@ -46,7 +34,12 @@ final class IndexController
             fn (): array => $branches->change($directory, $data['version'], $data['branch'], $data['operation'] === 'create'));
         $scanner->forgetWorkspace();
 
-        return to_route($result['ok'] ? 'repository' : 'repository.branches', $request->only('repo', 'changed'))->with('notice', $result['message']);
+        $back = to_route($result['ok'] ? 'repository' : 'repository.branches', $request->only('repo', 'changed'))->with('notice', $result['message']);
+        if ($data['operation'] === 'switch' && ! $result['ok'] && str_contains($result['message'], 'would be overwritten')) {
+            $back->with('blockedBranch', $data['branch']);
+        }
+
+        return $back;
     }
 
     public function change(Request $request, RepositoryScanner $scanner, IndexActions $index): RedirectResponse
@@ -131,6 +124,32 @@ final class IndexController
             'detail' => $detail, 'detailTitle' => $title, 'commit' => $commit]);
     }
 
+    public function publish(Request $request, RepositoryScanner $scanner, BranchPush $push): RedirectResponse
+    {
+        $directory = $this->directory($request, $scanner);
+        $data = $request->validate(['version' => ['required', 'string', 'size:64'], 'remote' => ['sometimes', 'string']]);
+        $result = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
+            fn (): array => $push->publish($directory, $data['version'], $data['remote'] ?? ''));
+        $back = to_route('repository.push.preview', $request->only('repo', 'remote'))->with('notice', $result['notice']);
+        if ($result['compareUrl'] !== null) {
+            $key = hash('sha256', $directory.$result['compareUrl']);
+            $request->session()->put('publishedComparison', ['directory' => $directory, 'key' => $key, 'url' => $result['compareUrl']]);
+            $back->with('openComparison', $key);
+        }
+
+        return $back;
+    }
+
+    public function openComparison(Request $request, RepositoryScanner $scanner): Response
+    {
+        $directory = $this->directory($request, $scanner);
+        $comparison = $request->session()->get('publishedComparison');
+        abort_unless($comparison && $comparison['directory'] === $directory && $comparison['key'] === $request->input('key'), 404);
+        Shell::openExternal($comparison['url']);
+
+        return response()->noContent();
+    }
+
     public function sync(Request $request, RepositoryScanner $scanner, BranchPush $push, string $operation): RedirectResponse
     {
         $directory = $this->directory($request, $scanner);
@@ -139,7 +158,6 @@ final class IndexController
             fn (): string => match ($operation) {
                 'fetch' => $push->fetch($directory, $data['version']),
                 'pull' => $push->pull($directory, $data['version']),
-                'publish' => $push->publish($directory, $data['version'], $request->string('remote')->toString()),
                 'push' => $push->send($directory, $data['version']),
                 default => abort(404),
             });

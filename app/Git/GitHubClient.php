@@ -23,22 +23,28 @@ final class GitHubClient
             if (! preg_match('/^remote\.(.+)\.url\n(.+)$/D', $entry, $parts)) {
                 continue;
             }
-            $url = $parts[2];
-            if (preg_match('~^(?:git@)?github\.com:(.+)$~iD', $url, $scp)) {
-                $path = $scp[1];
-            } elseif (strtolower((string) parse_url($url, PHP_URL_HOST)) === 'github.com'
-                && in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['https', 'ssh', 'git', 'http'], true)) {
-                $path = ltrim((string) parse_url($url, PHP_URL_PATH), '/');
-            } else {
-                continue;
-            }
-            $slug = preg_replace('~\.git$~i', '', rtrim($path, '/'));
-            if (is_string($slug) && preg_match('~^'.self::REPOSITORY.'$~D', $slug)) {
+            $slug = self::slug($parts[2]);
+            if ($slug !== null) {
                 $remotes[$parts[1]] = $slug;
             }
         }
 
         return $remotes['github'] ?? $remotes['origin'] ?? (array_values($remotes)[0] ?? null);
+    }
+
+    public static function slug(string $url): ?string
+    {
+        if (preg_match('~^(?:git@)?github\.com:(.+)$~iD', $url, $scp)) {
+            $path = $scp[1];
+        } elseif (strtolower((string) parse_url($url, PHP_URL_HOST)) === 'github.com'
+            && in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['https', 'ssh', 'git', 'http'], true)) {
+            $path = ltrim((string) parse_url($url, PHP_URL_PATH), '/');
+        } else {
+            return null;
+        }
+        $slug = preg_replace('~\.git$~i', '', rtrim($path, '/'));
+
+        return is_string($slug) && preg_match('~^'.self::REPOSITORY.'$~D', $slug) ? $slug : null;
     }
 
     public function configuredAccount(): ?string

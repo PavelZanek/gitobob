@@ -13,6 +13,9 @@
 <main class="branch-page">
     <section class="heading"><div><h1>Local branches</h1><p class="repository-meta">{{ $name }} · {{ $current }}</p></div></section>
     @if (session('notice'))<p class="action-notice branch-message" role="status">{{ session('notice') }}</p>@endif
+    @if (session('blockedBranch'))
+        <a class="button-link" href="{{ route('repository.stash.preview', $query + ['target' => session('blockedBranch')]) }}">Stash and switch…</a>
+    @endif
     @if ($errors->any())<p class="action-notice" role="alert">{{ $errors->first() }}</p>@endif
     <section class="panel">
         <div class="toolbar branch-tools">

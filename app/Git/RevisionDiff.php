@@ -16,8 +16,8 @@ final readonly class RevisionDiff
         return $firstParent ?? trim(Process::path($directory)->input('')->run(['git', 'hash-object', '-t', 'tree', '--stdin'])->throw()->output());
     }
 
-    /** @return array{files:array<string, ChangedFile>, selected:?ChangedFile, patch:string} */
-    public function review(string $directory, string $base, string $tip, string $fileId): array
+    /** @return array<string, ChangedFile> */
+    public function files(string $directory, string $base, string $tip): array
     {
         $output = Process::path($directory)->run(['git', 'diff', '--name-status', '-z', '--find-renames', '--no-ext-diff', '--no-textconv', $base, $tip, '--'])->throw()->output();
         $fields = explode("\0", $output);
@@ -32,6 +32,13 @@ final readonly class RevisionDiff
             $files[hash('sha256', $file->path)] = $file;
         }
 
+        return $files;
+    }
+
+    /** @return array{files:array<string, ChangedFile>, selected:?ChangedFile, patch:string} */
+    public function review(string $directory, string $base, string $tip, string $fileId): array
+    {
+        $files = $this->files($directory, $base, $tip);
         $selected = $files[$fileId === '' ? array_key_first($files) : $fileId] ?? null;
 
         return ['files' => $files, 'selected' => $selected, 'patch' => $selected === null ? '' : $this->diff->between($directory, $base, $tip, $selected)];

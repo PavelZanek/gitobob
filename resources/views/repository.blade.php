@@ -30,7 +30,7 @@
             </div>
             <a class="button-link" href="{{ route($reviewRoute, $selection) }}">Refresh</a>
         </section>
-        @if (session('notice'))<p class="action-notice" role="status">{{ session('notice') }}
+        @if (session('notice'))<p class="action-notice branch-message" role="status">{{ session('notice') }}
             @if (session('committed'))<a href="{{ route('repository.push.preview', $query) }}">Sync…</a>@endif
         </p>@endif
         <section class="panel" aria-label="Changed files">
@@ -44,6 +44,7 @@
                     <h2>Changes</h2>
                 @endif
                 <div class="review-actions">
+                    @unless ($allChanges)<a class="button-link" href="{{ route('repository.stashes', $query) }}">Stashes</a>@endunless
                     @if (! $allChanges && ! session('committed'))
                         <a class="button-link" href="{{ route('repository.push.preview', $query) }}">Sync…</a>
                     @endif

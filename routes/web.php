@@ -4,6 +4,7 @@ use App\Http\Controllers\CloudController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StashController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,7 +16,12 @@ Route::post('/workspace', [WorkspaceController::class, 'choose'])->name('workspa
 Route::get('/repository', RepositoryController::class)->name('repository');
 Route::get('/repository/branches', [IndexController::class, 'branches'])->name('repository.branches');
 Route::post('/repository/branches', [IndexController::class, 'changeBranch'])->name('repository.branches.change');
-Route::post('/repository/publish', [IndexController::class, 'sync'])->defaults('operation', 'publish')->name('repository.publish');
+Route::get('/repository/stashes', [StashController::class, 'index'])->name('repository.stashes');
+Route::get('/repository/stash-switch', [StashController::class, 'preview'])->name('repository.stash.preview');
+Route::post('/repository/stash-switch', [StashController::class, 'change'])->defaults('operation', 'save')->name('repository.stash.save');
+Route::post('/repository/stashes/apply', [StashController::class, 'change'])->defaults('operation', 'apply')->name('repository.stash.apply');
+Route::post('/repository/publish', [IndexController::class, 'publish'])->name('repository.publish');
+Route::post('/repository/publish/open', [IndexController::class, 'openComparison'])->name('repository.publish.open');
 Route::post('/repository/index', [IndexController::class, 'change'])->name('repository.index');
 Route::get('/repository/commit', [IndexController::class, 'preview'])->name('repository.commit.preview');
 Route::post('/repository/commit', [IndexController::class, 'commit'])->name('repository.commit');
