@@ -26,7 +26,7 @@ function initializeHunks() {
     }
 
     nav.hidden = false;
-    select(0);
+    select(Math.max(0, hunks.findIndex(row => row.classList.contains('current-hunk'))));
     nav.addEventListener('click', event => {
         const button = event.target.closest('button[data-hunk-step]');
         if (!button || button.disabled) return;
@@ -43,7 +43,37 @@ function initializeHunks() {
     }, { passive: true });
 }
 
-export function initializeReview() {
+function updateFileNavigation(controls, files, filter) {
+    if (!controls) return;
+    const visible = files.filter(file => !file.row.hidden);
+    const current = files.findIndex(file => file.selected);
+    const position = visible.findIndex(file => file.selected);
+    const before = files.slice(0, current).findLast(file => !file.row.hidden);
+    const after = files.slice(current + 1).find(file => !file.row.hidden);
+
+    function setTarget(key, file) {
+        const link = controls.querySelector(`[data-step="${key}"]`);
+        if (!file) {
+            link.removeAttribute('href');
+            link.setAttribute('aria-disabled', 'true');
+            return;
+        }
+        const url = new URL(file.url);
+        if (filter) url.searchParams.set('filter', filter);
+        url.hash = 'diff';
+        link.href = url.href;
+        link.removeAttribute('aria-disabled');
+    }
+
+    setTarget('k', before);
+    setTarget('j', after);
+    controls.querySelector('[data-file-position]').textContent = position >= 0
+        ? `File ${position + 1} of ${visible.length}`
+        : `${visible.length} matching ${visible.length === 1 ? 'file' : 'files'}`;
+    controls.hidden = false;
+}
+
+export function initializeReview(onFileNavigation) {
     initializeHunks();
     const filterBar = document.querySelector('.file-filter');
 
@@ -57,8 +87,17 @@ export function initializeReview() {
             const origin = row.querySelector('.file-origin')?.textContent ?? '';
             const path = directory ? directory + '/' + name : name;
 
-            return { row, search: (path + '\n' + origin).toLowerCase() };
+            const link = row.querySelector('a');
+            return { row, url: link.href.split('#')[0], selected: link.hasAttribute('aria-current'), search: (path + '\n' + origin).toLowerCase() };
         });
+
+        // A partially staged file has two sidebar rows but only one review position.
+        const firstRows = new Map();
+        for (const file of rows) {
+            if (!firstRows.has(file.url)) firstRows.set(file.url, file);
+        }
+        const ordered = [...firstRows.values()];
+        const controls = document.querySelector('[data-local-navigation]');
 
         function filterFiles() {
             const query = input.value.toLowerCase();
@@ -74,6 +113,8 @@ export function initializeReview() {
                 repository.hidden = !repository.querySelector('.files:not([hidden])');
             }
             empty.hidden = [...lists].some(list => !list.hidden);
+            updateFileNavigation(controls, ordered, input.value);
+            onFileNavigation();
         }
 
         filterBar.hidden = false;

@@ -8,19 +8,24 @@ function restoreDiffPosition(previous, current) {
     const hunks = [...before.querySelectorAll('.hunk')];
     const anchor = hunks.findLast(row => row.getBoundingClientRect().top <= top + (before.querySelector('.pull-controls')?.offsetHeight ?? 0) + 1);
     const offset = anchor && anchor.getBoundingClientRect().top - top;
-    const patch = anchor?.closest('.patch');
-    const label = patch?.getAttribute('aria-label');
-    const sectionHunks = patch && [...patch.querySelectorAll('.hunk')];
+    const newPatches = [...after.querySelectorAll('.patch')];
+    function matchingHunk(row) {
+        if (!row) return null;
+        const section = row.closest('.patch');
+        const target = newPatches.find(node => node.getAttribute('aria-label') === section.getAttribute('aria-label'));
+        const rows = [...(target?.querySelectorAll('.hunk') ?? [])];
+        return rows.find(candidate => candidate.textContent === row.textContent)
+            ?? rows[[...section.querySelectorAll('.hunk')].indexOf(row)];
+    }
+    const match = matchingHunk(anchor);
+    matchingHunk(before.querySelector('.current-hunk'))?.classList.add('current-hunk');
     const scroll = before.scrollTop;
     const open = [...before.querySelectorAll('.patch-headers')].map(details => details.open);
     const horizontal = new Map(patches.map(node => [node.getAttribute('aria-label'), node.scrollLeft]));
 
     return () => {
         after.querySelectorAll('.patch-headers').forEach((details, index) => { details.open = open[index] ?? false; });
-        const newPatches = [...after.querySelectorAll('.patch')];
         for (const node of newPatches) node.scrollLeft = horizontal.get(node.getAttribute('aria-label')) ?? 0;
-        const rows = [...(newPatches.find(node => node.getAttribute('aria-label') === label)?.querySelectorAll('.hunk') ?? [])];
-        const match = anchor && (rows.find(row => row.textContent === anchor.textContent) ?? rows[sectionHunks.indexOf(anchor)]);
         after.scrollTop = match ? match.getBoundingClientRect().top - after.getBoundingClientRect().top - offset : scroll;
     };
 }

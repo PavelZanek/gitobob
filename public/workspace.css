@@ -149,7 +149,7 @@ header .app-modes { margin-left: auto; }
 .pull-filters input[type=search] { width: min(280px, 100%); padding: 6px 9px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: var(--surface); font: inherit; }
 .pull-controls { justify-content: space-between; position: sticky; top: 0; background: var(--panel); z-index: 1; }
 .pull-controls nav span, .pull-filters > span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.pull-controls button:disabled { cursor: default; opacity: .45; }
+.pull-controls button:disabled, .pull-controls [aria-disabled=true] { cursor: default; opacity: .45; }
 .viewed-indicator { display: block; color: var(--accent); white-space: nowrap; }
 .pull-controls [aria-pressed=true] { color: var(--accent); background: var(--tag); }
 

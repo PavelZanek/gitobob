@@ -96,6 +96,14 @@
                                 <div>@if ($allChanges)<span class="diff-repository">{{ $relative === '.' ? $rootName : $relative }}</span>@endif<h2 class="filename">{{ $selected->path }}</h2></div>
                                 <label class="wrap-control"><input type="checkbox" id="wrap-lines">Wrap lines</label>
                             </div>
+                            <div class="pull-controls" data-local-navigation hidden>
+                                <nav aria-label="Navigate changed files">
+                                    <a class="button-link" role="link" data-step="k" aria-label="Previous file" title="Previous file (K)" aria-keyshortcuts="k">←</a>
+                                    <span data-file-position aria-live="polite"></span>
+                                    <a class="button-link" role="link" data-step="j" aria-label="Next file" title="Next file (J)" aria-keyshortcuts="j">→</a>
+                                </nav>
+                                @include('hunk-navigation')
+                            </div>
                             @foreach ($previews as $section => $patch)
                                 <h3 id="diff-{{ strtolower($section) }}" class="section-title">{{ $section }}</h3>
                                 @include('patch')

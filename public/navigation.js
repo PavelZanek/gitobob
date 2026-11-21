@@ -7,6 +7,7 @@ const statusMessage = document.querySelector('#navigation-status');
 let activeRequest;
 let preload;
 let skeletonTimer;
+let neighborTimer;
 
 function resetNavigation() {
     clearTimeout(skeletonTimer);
@@ -42,18 +43,40 @@ async function loadPage(url, signal, headers = {}) {
     return { page, url: response.url };
 }
 
-// Only warm the workspace overview on intent. Refresh and layout links have side effects.
-function prefetch(event) {
-    const link = event.target.closest('a[data-prefetch]');
-    if (!link || activeRequest) return;
-    if (preload?.url === link.href && performance.now() < preload.until) return;
+function discardPreload() {
+    clearTimeout(neighborTimer);
     preload?.controller.abort();
+    preload = null;
+}
+
+function warmPage(link, neighbor = false) {
+    const key = link.href.split('#')[0];
+    if (preload?.key === key && performance.now() < preload.until) return;
+    discardPreload();
     const controller = new AbortController();
     preload = {
-        url: link.href, until: performance.now() + 2000, controller,
+        key, until: performance.now() + (neighbor ? 15000 : 2000), controller,
         review: link.dataset.prefetch === 'review',
-        result: loadPage(link.href, controller.signal, { 'X-GitoBob-Preview': '1' }).catch(() => null),
+        result: loadPage(key, controller.signal, { 'X-GitoBob-Preview': '1' }).catch(() => null),
     };
+}
+
+function prefetch(event) {
+    const link = event.target.closest('a[data-prefetch]');
+    if (link && !activeRequest) warmPage(link);
+}
+
+function scheduleNeighbor() {
+    discardPreload();
+    const link = document.querySelector('[data-local-navigation] [data-step="j"][href]');
+    if (!link || document.hidden) return;
+    neighborTimer = setTimeout(() => {
+        if (link.isConnected && !activeRequest && !document.hidden) warmPage(link, true);
+    }, 80);
+}
+
+function initializePageReview() {
+    initializeReview(scheduleNeighbor);
 }
 
 document.addEventListener('pointerover', prefetch);
@@ -73,7 +96,8 @@ async function navigate(next, filterField = null) {
     cancelRefresh();
     clearTimeout(filterTimer);
     activeRequest?.abort();
-    const warm = preload?.url === next.href && performance.now() < preload.until ? preload : null;
+    clearTimeout(neighborTimer);
+    const warm = preload?.key === next.href.split('#')[0] && performance.now() < preload.until ? preload : null;
     if (!warm) preload?.controller.abort();
     preload = null;
     const controller = warm?.controller ?? new AbortController();
@@ -102,7 +126,7 @@ async function navigate(next, filterField = null) {
         document.body.className = loaded.page.body.className;
         document.title = loaded.page.title;
         initializeCloud();
-        initializeReview();
+        initializePageReview();
         const files = main.querySelector('.review-files');
         if (files) files.scrollTop = scrollTop;
         main.tabIndex = -1;
@@ -111,7 +135,7 @@ async function navigate(next, filterField = null) {
         (focus ?? main).focus({ preventScroll: true });
         if (focus?.type === 'search') focus.setSelectionRange(filterCursor, filterCursor);
         const current = files?.querySelector('[aria-current=true]');
-        if (current && main.querySelector('[data-pull-filter]')) current.scrollIntoView({ block: 'nearest' });
+        if (current && (main.querySelector('[data-pull-filter]') || main.querySelector('[data-local-navigation]'))) current.scrollIntoView({ block: 'nearest' });
         const anchor = target.hash && document.getElementById(target.hash.slice(1));
         if (anchor) anchor.scrollIntoView({ block: 'nearest' });
         else window.scrollTo(0, 0);
@@ -155,8 +179,8 @@ function cancelNavigation() {
     cancelRefresh();
     clearTimeout(filterTimer);
     activeRequest?.abort();
-    preload?.controller.abort();
-    activeRequest = preload = null;
+    discardPreload();
+    activeRequest = null;
     resetNavigation();
 }
 
@@ -171,7 +195,7 @@ window.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.repeat || event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey ||
         event.target.isContentEditable || event.target.closest('input, textarea, select')) return;
     const shortcuts = {
-        j: '[data-step="j"]', k: '[data-step="k"]',
+        j: '[data-step="j"][href]', k: '[data-step="k"][href]',
         n: '[data-hunk-navigation]:not([hidden]) [data-hunk-step="1"]:enabled',
         p: '[data-hunk-navigation]:not([hidden]) [data-hunk-step="-1"]:enabled',
     };
@@ -182,7 +206,10 @@ window.addEventListener('keydown', event => {
         step.click();
     }
 });
-initializeReview();
+initializePageReview();
 initializeCloud();
 
-const cancelRefresh = enableFocusRefresh(initializeReview, () => Boolean(activeRequest));
+const cancelRefresh = enableFocusRefresh(initializePageReview, () => Boolean(activeRequest));
+window.addEventListener('blur', discardPreload);
+window.Native?.on('Native\\Desktop\\Events\\Windows\\WindowBlurred', discardPreload);
+document.addEventListener('visibilitychange', () => { if (document.hidden) discardPreload(); });
