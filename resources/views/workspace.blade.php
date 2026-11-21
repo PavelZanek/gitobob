@@ -25,7 +25,7 @@
                     <div class="actions">
                         <a class="filter" role="switch" aria-checked="{{ $onlyChanged ? 'true' : 'false' }}"
                            href="{{ route('workspace', $onlyChanged ? [] : ['changed' => 1]) }}">Only changed</a>
-                        <a href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Refresh</a>
+                        <a class="button-link" href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Refresh</a>
                     </div>
                 </div>
                 @if ($tree)
