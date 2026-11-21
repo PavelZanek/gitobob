@@ -152,3 +152,9 @@ header .app-modes { margin-left: auto; }
 .pull-controls button:disabled { cursor: default; opacity: .45; }
 .viewed-indicator { display: block; color: var(--accent); white-space: nowrap; }
 .pull-controls [aria-pressed=true] { color: var(--accent); background: var(--tag); }
+
+.cloud-row.pull-row { padding: 0; }
+.pull-row .pull-link { display: block; padding: 10px 15px; }
+.review-progress { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 15px 10px; color: var(--muted); font-size: 12px; }
+.review-progress .button-link { color: var(--accent); }
+.patch .current-hunk { box-shadow: inset 3px 0 var(--accent); font-weight: 600; }

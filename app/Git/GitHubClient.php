@@ -41,7 +41,7 @@ final class GitHubClient
         return $remotes['github'] ?? $remotes['origin'] ?? (array_values($remotes)[0] ?? null);
     }
 
-    public function cacheKey(?string $repository): ?string
+    public function configuredAccount(): ?string
     {
         // Environment tokens can override the account selected in gh's local config.
         if (getenv('GH_TOKEN') || getenv('GITHUB_TOKEN')) {
@@ -52,21 +52,26 @@ final class GitHubClient
             return null;
         }
 
-        return 'github-overview:'.hash('sha256', strtolower(trim($account->output()).':'.$repository));
+        return trim($account->output());
+    }
+
+    /** @throws RuntimeException */
+    public function authenticatedAccount(): string
+    {
+        [$login] = $this->read('user', '[.login]', false);
+
+        return $login;
+    }
+
+    public function scopeKey(string $login, ?string $repository): string
+    {
+        return 'github-overview:'.hash('sha256', strtolower($login.':'.$repository));
     }
 
     /** @throws RuntimeException */
     public function reviewKey(string $repository, int $number): string
     {
-        $scope = $repository.'/pull/'.$number;
-        $key = $this->cacheKey($scope);
-        if ($key !== null) {
-            return $key;
-        }
-
-        [$login] = $this->read('user', '[.login]', false);
-
-        return 'github-overview:'.hash('sha256', strtolower($login.':'.$scope));
+        return $this->scopeKey($this->configuredAccount() ?? $this->authenticatedAccount(), $repository.'/pull/'.$number);
     }
 
     /** @return array<string, mixed> */

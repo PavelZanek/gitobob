@@ -33,8 +33,8 @@ function indicateLoading() {
     }, 150);
 }
 
-async function loadPage(url, signal) {
-    const response = await fetch(url, { signal, cache: 'no-store' });
+async function loadPage(url, signal, headers = {}) {
+    const response = await fetch(url, { signal, headers, cache: 'no-store' });
     if (!response.ok) throw new Error('Navigation failed');
     const page = new DOMParser().parseFromString(await response.text(), 'text/html');
     if (!page.querySelector('main') || !page.querySelector('header')) throw new Error('Unexpected page');
@@ -50,7 +50,8 @@ function prefetch(event) {
     const controller = new AbortController();
     preload = {
         url: link.href, until: performance.now() + 2000, controller,
-        result: loadPage(link.href, controller.signal).catch(() => null),
+        review: link.dataset.prefetch === 'review',
+        result: loadPage(link.href, controller.signal, { 'X-GitoBob-Preview': '1' }).catch(() => null),
     };
 }
 
@@ -79,7 +80,9 @@ async function navigate(next, filterField = null) {
 
     try {
         const prefetched = warm ? await warm.result : null;
-        const loaded = prefetched ?? await loadPage(next, controller.signal);
+        const loaded = prefetched && warm.review
+            ? await loadPage(next, controller.signal, { 'X-GitoBob-Warmed': '1' })
+            : prefetched ?? await loadPage(next, controller.signal);
         if (controller.signal.aborted) return;
         const target = new URL(loaded.url);
         target.hash = next.hash;
@@ -164,8 +167,13 @@ window.addEventListener('keydown', event => {
     if (event.key === 'Escape') cancelNavigation();
     if (event.defaultPrevented || event.repeat || event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey ||
         event.target.isContentEditable || event.target.closest('input, textarea, select')) return;
-    if (event.key !== 'j' && event.key !== 'k') return;
-    const step = document.querySelector(`[data-step="${event.key}"]`);
+    const shortcuts = {
+        j: '[data-step="j"]', k: '[data-step="k"]',
+        n: '[data-hunk-navigation]:not([hidden]) [data-hunk-step="1"]:enabled',
+        p: '[data-hunk-navigation]:not([hidden]) [data-hunk-step="-1"]:enabled',
+    };
+    if (!Object.hasOwn(shortcuts, event.key)) return;
+    const step = document.querySelector(shortcuts[event.key]);
     if (step && !activeRequest) {
         event.preventDefault();
         step.click();

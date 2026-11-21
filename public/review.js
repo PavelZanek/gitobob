@@ -1,4 +1,50 @@
+function initializeHunks() {
+    const nav = document.querySelector('[data-hunk-navigation]');
+    if (!nav) return;
+    const pane = nav.closest('.review-diff');
+    const hunks = [...pane.querySelectorAll('.patch-row.hunk')];
+    if (hunks.length < 2) return;
+
+    const previous = nav.querySelector('[data-hunk-step="-1"]');
+    const next = nav.querySelector('[data-hunk-step="1"]');
+    const position = nav.querySelector('[data-hunk-position]');
+    const toolbar = nav.closest('.pull-controls');
+    let current = 0;
+    let lastScroll = pane.scrollTop;
+
+    function select(index) {
+        hunks[current].classList.remove('current-hunk');
+        current = index;
+        hunks[index].classList.add('current-hunk');
+        position.textContent = `Change ${index + 1} of ${hunks.length}`;
+        previous.disabled = index === 0;
+        next.disabled = index === hunks.length - 1;
+    }
+
+    function visibleTop() {
+        return pane.getBoundingClientRect().top + toolbar.offsetHeight;
+    }
+
+    nav.hidden = false;
+    select(0);
+    nav.addEventListener('click', event => {
+        const button = event.target.closest('button[data-hunk-step]');
+        if (!button || button.disabled) return;
+        select(current + Number(button.dataset.hunkStep));
+        pane.scrollTop += hunks[current].getBoundingClientRect().top - visibleTop();
+        lastScroll = pane.scrollTop;
+    });
+    pane.addEventListener('scroll', () => {
+        if (lastScroll === pane.scrollTop) return;
+        lastScroll = pane.scrollTop;
+        const top = visibleTop() + 1;
+        const index = hunks.findLastIndex(hunk => hunk.getBoundingClientRect().top <= top);
+        select(Math.max(0, index));
+    }, { passive: true });
+}
+
 export function initializeReview() {
+    initializeHunks();
     const filterBar = document.querySelector('.file-filter');
 
     if (filterBar) {

@@ -16,12 +16,23 @@
         <section class="panel">
             <div class="toolbar"><h2>Open pull requests ({{ count($snapshot['pulls']) }})</h2></div>
             @forelse ($snapshot['pulls'] as $pr)
-                <a class="cloud-row pull-link" data-prefetch href="{{ route('cloud.pull', ['number' => $pr['number'], 'repository' => $repository]) }}">
-                    <strong>{{ $pr['title'] }}</strong>
-                    <p>#{{ $pr['number'] }} · {{ $pr['author'] }} @if ($pr['draft']) · Draft @endif</p>
-                    <p class="cloud-refs">{{ $pr['head'] }} → {{ $pr['base'] }}</p>
-                    <time datetime="{{ $pr['updated'] }}">{{ $pr['updated'] }}</time>
-                </a>
+                <div class="cloud-row pull-row">
+                    <a class="pull-link" data-prefetch="review" href="{{ route('cloud.pull', ['number' => $pr['number'], 'repository' => $repository]) }}">
+                        <strong>{{ $pr['title'] }}</strong>
+                        <p>#{{ $pr['number'] }} · {{ $pr['author'] }} @if ($pr['draft']) · Draft @endif</p>
+                        <p class="cloud-refs">{{ $pr['head'] }} → {{ $pr['base'] }}</p>
+                        <time datetime="{{ $pr['updated'] }}">{{ $pr['updated'] }}</time>
+                    </a>
+                    @isset($progress[$pr['number']])
+                        @php($saved = $progress[$pr['number']])
+                        <div class="review-progress">
+                            <span>{{ $saved['viewed'] }}@if ($saved['total'] !== null) of {{ $saved['total'] }}@endif files viewed</span>
+                            @if ($saved['total'] === null || $saved['viewed'] < $saved['total'])
+                                <a class="button-link" href="{{ route('cloud.pull', ['number' => $pr['number'], 'repository' => $repository, 'resume' => 1]) }}">Continue review</a>
+                            @endif
+                        </div>
+                    @endisset
+                </div>
             @empty
                 <p class="clean-workspace">No open pull requests.</p>
             @endforelse

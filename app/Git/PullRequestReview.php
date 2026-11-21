@@ -63,25 +63,91 @@ final readonly class PullRequestReview
         return $files;
     }
 
-    /** @return array<string, string> */
-    public function marks(string $scope): array
+    /** @return array{marks: array<string, string>, last?: string, total?: int, revision?: string} */
+    public function state(string $scope): array
     {
-        return Storage::disk('local')->json('pull-reviews/'.hash('sha256', $scope).'.json') ?? [];
+        $stored = Storage::disk('local')->json('pull-reviews/'.hash('sha256', $scope).'.json') ?? [];
+
+        return isset($stored['marks']) ? $stored : ['marks' => $stored];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $pulls
+     * @return array<int, array{viewed: int, total: ?int}>
+     */
+    public function summaries(string $login, string $repository, array $pulls): array
+    {
+        $progress = [];
+        foreach ($pulls as $pull) {
+            $state = $this->state($this->github->scopeKey($login, $repository.'/pull/'.$pull['number']));
+            if (($state['total'] ?? 0) > 0 || $state['marks'] !== []) {
+                $progress[$pull['number']] = ['viewed' => count($state['marks']), 'total' => $state['total'] ?? null];
+            }
+        }
+
+        return $progress;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $files
+     * @param  array<string, string>  $marks
+     */
+    public function resumePosition(array $files, array $marks, ?string $last): int
+    {
+        $start = (int) array_search($last, array_column($files, 'id'), true);
+        $count = count($files);
+        for ($offset = 0; $offset < $count; $offset++) {
+            $position = ($start + $offset) % $count;
+            $entry = $files[$position];
+            if (($marks[$entry['id']] ?? null) !== $entry['version']) {
+                return $position;
+            }
+        }
+
+        return $start;
+    }
+
+    /** @param array<string, string> $outdated */
+    public function remember(string $scope, ?string $file, int $total, string $revision, array $outdated): void
+    {
+        $this->update($scope, static function (array $state) use ($file, $total, $revision, $outdated): array {
+            $state['marks'] = array_diff_assoc($state['marks'], $outdated);
+            if ($file !== null) {
+                $state['last'] = $file;
+            }
+            $state['total'] = $total;
+            $state['revision'] = $revision;
+
+            return $state;
+        });
     }
 
     public function mark(string $scope, string $id, string $version, bool $viewed): void
     {
-        Cache::lock($scope.':write', 10)->block(5, function () use ($scope, $id, $version, $viewed): void {
-            $marks = $this->marks($scope);
+        $this->update($scope, static function (array $state) use ($id, $version, $viewed): array {
             if ($viewed) {
-                $marks[$id] = $version;
-            } elseif (($marks[$id] ?? null) === $version) {
-                unset($marks[$id]);
+                $state['marks'][$id] = $version;
+            } elseif (($state['marks'][$id] ?? null) === $version) {
+                unset($state['marks'][$id]);
+            }
+
+            return $state;
+        });
+    }
+
+    /** @param callable(array<string, mixed>): array<string, mixed> $change */
+    private function update(string $scope, callable $change): void
+    {
+        Cache::lock($scope.':write', 10)->block(5, function () use ($scope, $change): void {
+            $state = $this->state($scope);
+            $updated = $change($state);
+            if ($state === $updated) {
+                return;
             }
 
             $path = Storage::disk('local')->path('pull-reviews/'.hash('sha256', $scope).'.json');
             File::ensureDirectoryExists(dirname($path));
-            File::replace($path, json_encode($marks, JSON_THROW_ON_ERROR));
+            File::replace($path, json_encode($updated, JSON_THROW_ON_ERROR));
         });
     }
 }

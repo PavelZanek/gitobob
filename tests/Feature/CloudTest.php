@@ -6,8 +6,11 @@ use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Native\Desktop\Facades\Shell;
 
-it('opens the GitHub remote of a local project even when origin uses GitLab', function (): void {
+beforeEach(function (): void {
     Storage::fake('local');
+});
+
+it('opens the GitHub remote of a local project even when origin uses GitLab', function (): void {
     $root = Storage::disk('local')->path('projects');
     Process::run(['git', 'init', $root.'/project'])->throw();
     Process::run(['git', '-C', $root.'/project', 'remote', 'add', 'origin', 'https://gitlab.com/example/old.git'])->throw();
@@ -148,11 +151,11 @@ it('navigates both ways across pages and filters paths across the entire pull re
     $this->get($url.'&page=2')->assertSee('File 31 of 34')->assertSee('+line31')->assertSee('edge=last');
     $this->get($url.'&page=2&edge=last')->assertSee('File 34 of 34')->assertDontSee('data-step="j"', false);
     $this->get($url.'&filter=TESTS%2F&edge=last')->assertOk()->assertSee('File 17 of 17')->assertSee('+line34')->assertDontSee('file31.php');
+    $this->get($url.'&resume=1')->assertSee('File 34 of 34')->assertSee('+line34');
     $this->get($url.'&filter=missing')->assertOk()->assertSee('No files match your filters.');
 });
 
 it('persists viewed versions per account and makes edited files unread again', function (): void {
-    Storage::fake('local');
     $login = 'reader';
     $sha = 'old-blob';
     Process::fake(function (PendingProcess $process) use (&$login, &$sha) {
@@ -184,4 +187,57 @@ it('persists viewed versions per account and makes edited files unread again', f
     $login = 'reader';
     $sha = 'changed-blob';
     $this->get($url.'&hide=1')->assertOk()->assertSee('logo.png')->assertSee('Mark as viewed');
+});
+
+it('resumes the actual review and reconciles local progress after the pull request changes', function (): void {
+    $account = 'alex';
+    $sha = 'original';
+    $requests = [];
+    Process::fake(function (PendingProcess $process) use (&$account, &$sha, &$requests) {
+        if ($process->command[1] === 'config') {
+            return Process::result($account);
+        }
+        $requests[] = $endpoint = end($process->command);
+        $pr = ['number' => 7, 'title' => 'Example PR', 'author' => 'alex', 'head' => 'topic', 'base' => 'main',
+            'updated' => '2026-01-04T00:00:00Z', 'draft' => false, 'changed_files' => 3, 'base_sha' => 'base', 'head_sha' => $sha];
+        $data = match ($endpoint) {
+            'repos/example/repo/pulls/7', 'repos/example/repo/pulls?state=open&sort=updated&per_page=100' => [$pr],
+            'repos/example/repo/branches?per_page=100' => ['main'],
+            'repos/example/repo/pulls/7/files?per_page=30&page=2' => [],
+            'repos/example/repo/pulls/7/files?per_page=30&page=1' => array_map(static fn (string $name): array => [
+                'filename' => $name, 'previous_filename' => null, 'sha' => $name === 'a' ? $sha : $name, 'status' => 'modified',
+                'additions' => 1, 'deletions' => 1, 'limited' => false, 'patch' => "@@ -1 +1 @@\n-old\n+$name",
+            ], ['a', 'b', 'c']),
+        };
+
+        return Process::result(json_encode($data, JSON_THROW_ON_ERROR));
+    });
+    $url = '/cloud/pulls/7?repository=example/repo';
+    $overview = '/cloud/data?repository=example/repo';
+    $this->get($url, ['X-GitoBob-Preview' => '1'])->assertOk();
+    $this->get($overview)->assertDontSee('Continue review');
+
+    $mark = function (string $name) use ($url): void {
+        $page = $this->get($url.'&file='.hash('sha256', $name))->assertOk();
+        $selected = $page->viewData('selected');
+        $this->post('/cloud/pulls/7/viewed?repository=example/repo', [
+            'scope' => hash('sha256', $page->viewData('scope')), 'id' => $selected['id'], 'version' => $selected['version'], 'viewed' => 1,
+        ])->assertRedirect();
+    };
+    $mark('a');
+    $this->get($url.'&page=2')->assertOk();
+    $this->get($url.'&file='.hash('sha256', 'b'));
+    $this->get($url, ['X-GitoBob-Preview' => '1']);
+    $requests = [];
+    $this->get('/cloud?repository=example/repo')->assertOk()->assertSee('1 of 3 files viewed')->assertSee('Continue review');
+    expect($requests)->toBe([]);
+    $this->get($url.'&resume=1')->assertSee('File 2 of 3')->assertSee('+b');
+    $mark('b');
+    $this->get($url.'&resume=1')->assertSee('File 3 of 3')->assertSee('+c');
+    $this->get($url)->assertSee('File 1 of 3');
+    $sha = 'new-commit';
+    $this->get($url.'&resume=1')->assertSee('+a')->assertSee('Mark as viewed');
+    $this->get($overview)->assertSee('1 of 3 files viewed');
+    $account = 'another-reviewer';
+    $this->get($overview)->assertDontSee('Continue review')->assertDontSee('files viewed');
 });
