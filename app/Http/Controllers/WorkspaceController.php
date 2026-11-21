@@ -25,7 +25,7 @@ final class WorkspaceController
 
     public function choose(): RedirectResponse
     {
-        $path = Dialog::new()->folders()->title('Vybrat pracovní složku')->button('Vybrat složku')->open();
+        $path = Dialog::new()->folders()->title('Choose a workspace folder')->button('Choose folder')->open();
         if (is_string($path) && is_dir($path)) {
             Storage::disk('local')->put('workspace.path', $path);
         }

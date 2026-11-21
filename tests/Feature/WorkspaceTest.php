@@ -40,7 +40,7 @@ it('keeps the previous folder when the picker is dismissed', function (): void {
 
     $this->post('/workspace')->assertRedirect('/');
     expect(Storage::disk('local')->get('workspace.path'))->toBe('/previous');
-    $this->get('/')->assertOk()->assertSee('Složka není dostupná');
+    $this->get('/')->assertOk()->assertSee('Folder unavailable');
 });
 
 it('shows the empty repository state and ignores dependency directories', function (): void {
@@ -49,6 +49,6 @@ it('shows the empty repository state and ignores dependency directories', functi
     Process::run(['git', 'init', $root.'/vendor/package'])->throw();
     Storage::disk('local')->put('workspace.path', $root);
 
-    $this->get('/')->assertOk()->assertSee('Žádné repozitáře')->assertDontSee('package');
+    $this->get('/')->assertOk()->assertSee('No repositories found')->assertDontSee('package');
     expect((new RepositoryScanner)->scan($root.'/missing'))->toBeNull();
 });

@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "pavelzanek/gitobob",
     "type": "project",
-    "description": "Lokální přehled Git repozitářů pro macOS.",
+    "description": "A local Git repository browser for macOS.",
     "keywords": [
         "laravel",
         "framework"
