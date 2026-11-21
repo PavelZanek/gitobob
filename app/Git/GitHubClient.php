@@ -89,16 +89,16 @@ final class GitHubClient
     }
 
     /**
-     * @return array{pull: array<string, mixed>, files: list<mixed>}
+     * @return array<string, mixed>
      *
      * @throws RuntimeException when GitHub cannot return the pull request
      */
-    public function pullRequest(string $repository, int $number, int $page): array
+    public function pullMetadata(string $repository, int $number): array
     {
         $endpoint = 'repos/'.$repository.'/pulls/'.$number;
         [$pull] = $this->read($endpoint, '[{title, head:.head.label, base:.base.ref, base_sha:.base.sha, head_sha:.head.sha, changed_files}]', false);
 
-        return ['pull' => $pull, 'files' => $this->filePage($endpoint, $page, self::FILES_PER_PAGE)];
+        return $pull;
     }
 
     /**

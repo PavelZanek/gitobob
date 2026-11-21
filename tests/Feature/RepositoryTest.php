@@ -148,3 +148,20 @@ it('expires workspace snapshots and isolates them by folder', function (): void 
     Storage::disk('local')->put('workspace.path', $other);
     $this->get('/changes?snapshot=1')->assertOk()->assertSee('All repositories are clean.')->assertDontSee('later.txt');
 });
+
+it('refreshes the selected working diff and advances when it leaves the change list', function (): void {
+    foreach (['a', 'b', 'c'] as $name) {
+        file_put_contents($this->repo.'/'.$name, $name." original\n");
+    }
+    $url = '/repository?repo=client&slot=1&file='.hash('sha256', 'b');
+    $revision = $this->get($url)->assertSee('+b original')->viewData('revision');
+    $headers = ['X-GitoBob-Revision' => $revision];
+    $this->get($url, $headers)->assertNoContent();
+    file_put_contents($this->repo.'/b', "edited outside GitoBob\n");
+    $this->get($url, $headers)->assertSee('+edited outside GitoBob');
+    unlink($this->repo.'/b');
+    $this->get($url, $headers)->assertSee('+c original')->assertDontSee('no longer in the change list');
+    unlink($this->repo.'/a');
+    unlink($this->repo.'/c');
+    $this->get($url, $headers)->assertSee('This repository is clean.')->assertDontSee('aria-label="File diff"', false);
+});

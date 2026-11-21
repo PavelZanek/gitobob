@@ -234,9 +234,14 @@ it('resumes the actual review and reconciles local progress after the pull reque
     $this->get($url.'&resume=1')->assertSee('File 2 of 3')->assertSee('+b');
     $mark('b');
     $this->get($url.'&resume=1')->assertSee('File 3 of 3')->assertSee('+c');
-    $this->get($url)->assertSee('File 1 of 3');
+    $page = $this->get($url)->assertSee('File 1 of 3');
+    $headers = ['X-GitoBob-Revision' => hash('sha256', $page->viewData('scope').$page->viewData('revision'))];
+    $requests = [];
+    $this->get($url, $headers)->assertNoContent();
+    expect($requests)->toBe(['repos/example/repo/pulls/7']);
     $sha = 'new-commit';
     $this->get($url.'&resume=1')->assertSee('+a')->assertSee('Mark as viewed');
+    $this->get($url.'&file='.hash('sha256', 'b'), $headers)->assertSee('File 2 of 3')->assertSee('+b')->assertSee('aria-pressed="true"', false);
     $this->get($overview)->assertSee('1 of 3 files viewed');
     $account = 'another-reviewer';
     $this->get($overview)->assertDontSee('Continue review')->assertDontSee('files viewed');

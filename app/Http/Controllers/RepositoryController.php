@@ -67,6 +67,15 @@ final class RepositoryController
         $visible = $groups[$relative] ?? [];
         $firstGroup = reset($visible);
         $fileId = $request->query('file', $firstGroup === false ? null : array_key_first($firstGroup));
+        $slots = [];
+        foreach ($visible as $files) {
+            $slots += $files;
+        }
+        $ids = array_keys($slots);
+        if ($request->hasHeader('X-GitoBob-Revision') && (! is_string($fileId) || ! isset($slots[$fileId]))) {
+            $fileId = $ids[min(max(0, $request->integer('slot')), count($ids) - 1)] ?? null;
+        }
+        $slot = is_string($fileId) ? array_search($fileId, $ids, true) : false;
         $selected = is_string($fileId) ? ($repositories[$relative]->files[$fileId] ?? null) : null;
         $previews = [];
         $showDiff = $request->query('diff') !== 'hidden';
@@ -78,12 +87,17 @@ final class RepositoryController
             }
         }
 
+        $revision = $allChanges ? null : hash('sha256', serialize([$repositories, $fileId, $grouped, $showDiff, $previews]));
+        if ($revision !== null && $request->header('X-GitoBob-Revision') === $revision) {
+            return response('', 204);
+        }
+
         $response = response()->view('repository', [
             'name' => $allChanges ? 'All changes' : (basename($relative === '.' ? $root : $relative) ?: '/'),
             'rootName' => basename($root) ?: '/', 'relative' => $relative, 'repositories' => $repositories,
             'allChanges' => $allChanges, 'total' => array_sum(array_column($repositories, 'changedFiles')),
             'grouped' => $grouped, 'groups' => $groups, 'fileId' => $fileId, 'selected' => $selected,
-            'showDiff' => $showDiff, 'previews' => $previews, 'onlyChanged' => $request->boolean('changed'),
+            'revision' => $revision, 'slot' => $slot, 'showDiff' => $showDiff, 'previews' => $previews, 'onlyChanged' => $request->boolean('changed'),
         ]);
         if ($request->has('layout')) {
             $response->withCookie(cookie()->forever('file_layout', $grouped ? 'grouped' : 'all'));

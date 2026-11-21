@@ -14,7 +14,9 @@
         $query = $base + ['filter' => $filter !== '' ? $filter : null, 'hide' => $hide ?: null];
         $browse = $query + ['snapshot' => 1];
     @endphp
-    <main class="repository-review">
+    <main class="repository-review" @isset($scope)
+        data-refresh-url="{{ route('cloud.pull', $query + ['page' => $page, 'file' => $selected['id'] ?? null, 'slot' => $position ?: null]) }}"
+        data-refresh-scope="{{ hash('sha256', $scope) }}" data-revision="{{ hash('sha256', $scope.$revision) }}" data-file="{{ $selected['id'] ?? '' }}" @endisset>
         <section class="heading">
             <div>
                 <h1>{{ $detail['pull']['title'] ?? 'Pull request' }}</h1>

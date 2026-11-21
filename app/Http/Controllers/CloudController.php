@@ -81,15 +81,20 @@ final class CloudController
         $last = $request->query('edge') === 'last';
         $resume = $request->boolean('resume');
         $preview = $request->header('X-GitoBob-Preview') === '1';
-        $source = $filtered || $resume ? 1 : $page;
+        $refresh = $request->hasHeader('X-GitoBob-Revision');
+        $source = $filtered || $resume || $refresh ? 1 : $page;
 
         try {
             $scope = $github->reviewKey($repository, $number);
             $state = $review->state($scope);
             $snapshot = $request->boolean('snapshot') || $request->header('X-GitoBob-Warmed') === '1';
-            $detail = $review->detail($scope, $repository, $number, $source, $snapshot);
+            $metadata = $refresh ? $github->pullMetadata($repository, $number) : null;
+            if ($metadata !== null && hash('sha256', $scope.$review->revision($metadata)) === $request->header('X-GitoBob-Revision')) {
+                return response('', 204)->header('Cache-Control', 'no-store');
+            }
+            $detail = $review->detail($scope, $repository, $number, $source, ! $refresh && $snapshot, metadata: $metadata);
             $revision = $review->revision($detail['pull']);
-            if ($snapshot && isset($state['revision']) && $state['revision'] !== $revision) {
+            if (! $refresh && $snapshot && isset($state['revision']) && $state['revision'] !== $revision) {
                 $detail = $review->detail($scope, $repository, $number, $source, false);
                 $revision = $review->revision($detail['pull']);
             }
@@ -100,7 +105,7 @@ final class CloudController
             $available = $total;
             $reconcile = $marks !== [] && ($state['revision'] ?? null) !== $revision;
             $all = $entries;
-            if ($total > $size && ($filtered || $resume || $reconcile)) {
+            if ($total > $size && ($filtered || $resume || $reconcile || $refresh)) {
                 $all = $review->index($scope, $repository, $number, $detail['pull']);
             }
             if ($reconcile && $total <= $size && $source !== 1) {
@@ -110,14 +115,21 @@ final class CloudController
                 ? array_diff_assoc($marks, array_column($all, 'version', 'id')) : [];
             $marks = array_diff_assoc($marks, $outdated);
 
-            if ($resume || $filtered) {
+            if ($resume || $filtered || $refresh) {
                 $entries = $all;
                 $entries = array_values(array_filter($entries, static fn (array $entry): bool => (! $hide || ($marks[$entry['id']] ?? null) !== $entry['version'])
                     && (mb_stripos($entry['filename'], trim($filter)) !== false
                         || mb_stripos($entry['previous_filename'] ?? '', trim($filter)) !== false)
                 ));
                 $total = count($entries);
-                if ($resume) {
+                if ($refresh) {
+                    $cursor = array_search($file, array_column($entries, 'id'), true);
+                    if ($cursor === false) {
+                        $cursor = min(($page - 1) * $size + max(0, min($size - 1, $request->integer('slot'))), max(0, $total - 1));
+                    }
+                    $file = $entries[$cursor]['id'] ?? null;
+                    $page = intdiv($cursor, $size) + 1;
+                } elseif ($resume) {
                     $cursor = $review->resumePosition($entries, $marks, $state['last'] ?? null);
                     $file = $entries[$cursor]['id'] ?? null;
                     $page = intdiv($cursor, $size) + 1;
@@ -143,7 +155,7 @@ final class CloudController
                 $review->remember($scope, $selected['id'] ?? null, $available, $revision, $outdated);
             }
 
-            return response()->view('cloud-pull', compact('repository', 'number', 'detail', 'files', 'selected', 'count', 'page', 'pages', 'file', 'filter', 'hide', 'total', 'position', 'ids', 'size', 'marks', 'scope'))
+            return response()->view('cloud-pull', compact('repository', 'number', 'detail', 'files', 'selected', 'count', 'page', 'pages', 'file', 'filter', 'hide', 'total', 'position', 'ids', 'size', 'marks', 'scope', 'revision'))
                 ->header('Cache-Control', 'no-store');
         } catch (RuntimeException $exception) {
             if (! in_array($exception->getCode(), [401, 403, 503], true)) {
@@ -151,7 +163,7 @@ final class CloudController
             }
 
             return response()->view('cloud-pull', ['error' => $exception->getMessage(), 'detail' => null, 'repository' => $repository, 'number' => $number,
-                'page' => $page, 'file' => $file, 'filter' => $filter, 'hide' => $hide])->header('Cache-Control', 'no-store');
+                'page' => $page, 'file' => $file, 'filter' => $filter, 'hide' => $hide], $refresh && $exception->getCode() === 503 ? 503 : 200)->header('Cache-Control', 'no-store');
         }
     }
 

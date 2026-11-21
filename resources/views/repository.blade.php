@@ -13,7 +13,9 @@
     @php($snapshot = $allChanges ? ['snapshot' => 1] : [])
     @php($query = ['repo' => $relative === '' ? null : $relative, 'changed' => $onlyChanged ?: null])
     @php($selection = $query + ['file' => $fileId, 'diff' => $showDiff ? null : 'hidden'])
-    <main class="repository-review">
+    <main class="repository-review" @unless($allChanges)
+        data-refresh-url="{{ route($reviewRoute, $selection + ['slot' => $slot ?: null]) }}"
+        data-revision="{{ $revision }}" data-file="{{ $fileId }}" @endunless>
         <section class="heading">
             <div>
                 <h1>{{ $name }}</h1>

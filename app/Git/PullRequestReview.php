@@ -11,8 +11,11 @@ final readonly class PullRequestReview
 {
     public function __construct(private GitHubClient $github) {}
 
-    /** @return array<string, mixed> */
-    public function detail(string $scope, string $repository, int $number, int $page, bool $snapshot, ?string $revision = null): array
+    /**
+     * @param  array<string, mixed>|null  $metadata
+     * @return array<string, mixed>
+     */
+    public function detail(string $scope, string $repository, int $number, int $page, bool $snapshot, ?string $revision = null, ?array $metadata = null): array
     {
         $key = $scope.':files:'.$page;
         $cached = $snapshot ? Cache::get($key) : null;
@@ -24,7 +27,8 @@ final readonly class PullRequestReview
         }
 
         Cache::forget($key);
-        $detail = $this->github->pullRequest($repository, $number, $page);
+        $detail = ['pull' => $metadata ?? $this->github->pullMetadata($repository, $number),
+            'files' => $this->github->filePage('repos/'.$repository.'/pulls/'.$number, $page, GitHubClient::FILES_PER_PAGE)];
         Cache::put($key, Crypt::encryptString(json_encode($detail, JSON_THROW_ON_ERROR)), now()->addMinutes(2));
 
         return $detail;

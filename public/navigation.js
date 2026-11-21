@@ -1,3 +1,4 @@
+import { enableFocusRefresh } from './focus-refresh.js';
 import { initializeCloud } from './cloud.js';
 import { initializeReview } from './review.js';
 
@@ -69,6 +70,7 @@ document.addEventListener('click', event => {
 });
 
 async function navigate(next, filterField = null) {
+    cancelRefresh();
     clearTimeout(filterTimer);
     activeRequest?.abort();
     const warm = preload?.url === next.href && performance.now() < preload.until ? preload : null;
@@ -150,6 +152,7 @@ document.addEventListener('submit', event => {
 });
 
 function cancelNavigation() {
+    cancelRefresh();
     clearTimeout(filterTimer);
     activeRequest?.abort();
     preload?.controller.abort();
@@ -181,3 +184,5 @@ window.addEventListener('keydown', event => {
 });
 initializeReview();
 initializeCloud();
+
+const cancelRefresh = enableFocusRefresh(initializeReview, () => Boolean(activeRequest));
