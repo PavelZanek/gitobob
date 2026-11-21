@@ -7,6 +7,8 @@ final class ChangedFile
     /** @var array<string, string> Git status code by section. */
     public array $sections = [];
 
+    public string $statusRecord = '';
+
     public ?string $originalPath = null;
 
     public function __construct(public readonly string $path) {}

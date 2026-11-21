@@ -118,6 +118,21 @@ final class GitHubClient
         return $files;
     }
 
+    public function postComment(string $repository, int $number, string $body): void
+    {
+        try {
+            $result = Process::timeout(30)->env(['GH_PROMPT_DISABLED' => '1', 'GH_NO_UPDATE_NOTIFIER' => '1'])
+                ->input(json_encode(['body' => $body], JSON_THROW_ON_ERROR))
+                ->run([$this->binary(), 'api', '--hostname', 'github.com', '--method', 'POST', '--input', '-',
+                    '--silent', 'repos/'.$repository.'/issues/'.$number.'/comments']);
+        } catch (ProcessTimedOutException) {
+            throw new RuntimeException('GitHub did not confirm the comment. Check the conversation before posting again.');
+        }
+        if (! $result->successful()) {
+            throw new RuntimeException('GitHub did not confirm the comment. Check the conversation and your write access before posting again.');
+        }
+    }
+
     /** @return list<mixed> */
     private function read(string $endpoint, string $projection, bool $paginate = true): array
     {

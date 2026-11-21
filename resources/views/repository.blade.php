@@ -30,6 +30,7 @@
             </div>
             <a class="button-link" href="{{ route($reviewRoute, $selection) }}">Refresh</a>
         </section>
+        @if (session('notice'))<p class="action-notice" role="status">{{ session('notice') }}</p>@endif
         <section class="panel" aria-label="Changed files">
             <div class="toolbar">
                 @if ($allChanges)
@@ -41,6 +42,9 @@
                     <h2>Changes</h2>
                 @endif
                 <div class="review-actions">
+                    @if (isset($repositories[$relative]) && collect($repositories[$relative]->files)->contains(fn ($file) => isset($file->sections['Staged'])))
+                        <a class="button-link" href="{{ route('repository.commit.preview', ['repo' => $relative]) }}">Commit staged…@if ($allChanges) · {{ $relative === '.' ? $rootName : $relative }}@endif</a>
+                    @endif
                     @if ($total > 0)
                         <a class="button-link" href="{{ route($reviewRoute, $snapshot + $query + ['file' => $selected ? $fileId : null, 'diff' => $showDiff ? 'hidden' : null]) }}">{{ $showDiff ? 'Hide diff' : 'Show diff' }}</a>
                     @endif
@@ -105,8 +109,22 @@
                                 @include('hunk-navigation')
                             </div>
                             @foreach ($previews as $section => $patch)
-                                <h3 id="diff-{{ strtolower($section) }}" class="section-title">{{ $section }}</h3>
-                                @include('patch')
+                                <div id="diff-{{ strtolower($section) }}" class="section-title index-actions">
+                                    <h3>{{ $section }}</h3>
+                                    @if ($version)
+                                        <form data-index-form id="index-{{ $section }}" method="post" action="{{ route('repository.index', $query + ['all' => $allChanges ?: null]) }}">
+                                            @if ($allChanges)<span>{{ $relative === '.' ? $rootName : $relative }}</span>@endif
+                                            <input type="hidden" name="filter" value="{{ request()->query('filter') }}">
+                                            <input type="hidden" name="patch_version" value="{{ hash('sha256', $patch) }}">
+                                            @csrf
+                                            <input type="hidden" name="file" value="{{ $fileId }}">
+                                            <input type="hidden" name="version" value="{{ $version }}">
+                                            <input type="hidden" name="section" value="{{ $section }}">
+                                            <button>{{ $section === 'Staged' ? 'Unstage file' : 'Stage file' }}</button>
+                                        </form>
+                                    @endif
+                                </div>
+                                @include('patch', ['hunkAction' => $version && $selected->sections[$section] === 'M' && ! str_contains($patch, "\n… Preview limited to 256 KiB.")])
                             @endforeach
                         @else
                             <p class="clean-workspace">This file is no longer in the change list.</p>

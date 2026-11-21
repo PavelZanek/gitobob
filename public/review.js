@@ -75,6 +75,15 @@ function updateFileNavigation(controls, files, filter) {
 
 export function initializeReview(onFileNavigation) {
     initializeHunks();
+    const draft = document.querySelector('[data-comment-draft]');
+    if (draft) {
+        const key = 'pr-draft:' + draft.dataset.commentDraft;
+        const field = draft.querySelector('textarea');
+        if (draft.hasAttribute('data-posted')) sessionStorage.removeItem(key);
+        field.value ||= sessionStorage.getItem(key) ?? '';
+        if (field.value) draft.open = true;
+        field.addEventListener('input', () => sessionStorage.setItem(key, field.value));
+    }
     const filterBar = document.querySelector('.file-filter');
 
     if (filterBar) {

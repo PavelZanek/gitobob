@@ -246,3 +246,26 @@ it('resumes the actual review and reconciles local progress after the pull reque
     $account = 'another-reviewer';
     $this->get($overview)->assertDontSee('Continue review')->assertDontSee('files viewed');
 });
+
+it('posts an explicit PR comment once and retains the draft on an unconfirmed response', function (): void {
+    $posts = [];
+    $fail = false;
+    Process::fake(function (PendingProcess $process) use (&$posts, &$fail) {
+        if ($process->command[1] === 'config') {
+            return Process::result('reviewer');
+        }
+        expect($process->command)->toContain('POST', '--input', '-', 'repos/example/demo/issues/4/comments');
+        $posts[] = json_decode($process->input, true, flags: JSON_THROW_ON_ERROR);
+
+        return Process::result(exitCode: $fail ? 1 : 0);
+    });
+    $scope = hash('sha256', (new GitHubClient)->reviewKey('example/demo', 4));
+    $url = '/cloud/pulls/4/comments?repository=example/demo';
+    $body = ['scope' => $scope, 'submission' => (string) Str::uuid(), 'comment' => "Reviewed the change.\n\nLooks good."];
+    $this->post($url, ['scope' => str_repeat('c', 64)] + $body)->assertConflict();
+    $this->post($url, $body)->assertSessionHas('posted', $scope);
+    $this->post($url, $body)->assertSessionHas('notice', 'This submission was already received. Check the PR conversation.');
+    expect($posts)->toBe([['body' => $body['comment']]]);
+    $fail = true;
+    $this->post($url, ['submission' => (string) Str::uuid()] + $body)->assertSessionHasInput('comment', $body['comment']);
+});

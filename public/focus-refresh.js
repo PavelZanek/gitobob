@@ -60,8 +60,8 @@ export function enableFocusRefresh(initialize, navigating) {
             const listTop = main.querySelector('.review-files')?.scrollTop ?? 0;
             const windowTop = window.scrollY;
             const field = document.activeElement;
-            const focusSelector = ['.file-filter input', '[data-pull-filter] input[type=search]', '#wrap-lines', '[name=hide]', '.files [aria-current=true]'].find(selector => field?.matches(selector));
-            const caret = field?.type === 'search' ? [field.selectionStart, field.selectionEnd] : null;
+            const focusSelector = ['#pr-comment', '.file-filter input', '[data-pull-filter] input[type=search]', '#wrap-lines', '[name=hide]', '.files [aria-current=true]'].find(selector => field?.matches(selector));
+            const caret = (field?.type === 'search' || field?.type === 'textarea') ? [field.selectionStart, field.selectionEnd] : null;
             const canonical = new URL(next.dataset.refreshUrl ?? url);
             canonical.searchParams.delete('slot');
             if (!main.dataset.refreshScope) {

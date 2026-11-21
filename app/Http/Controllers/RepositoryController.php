@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Git\FileDiff;
+use App\Git\IndexActions;
 use App\Git\RepositoryScanner;
 use App\Git\RepositoryStatus;
 use Illuminate\Http\RedirectResponse;
@@ -78,16 +79,18 @@ final class RepositoryController
         $slot = is_string($fileId) ? array_search($fileId, $ids, true) : false;
         $selected = is_string($fileId) ? ($repositories[$relative]->files[$fileId] ?? null) : null;
         $previews = [];
+        $version = null;
         $showDiff = $request->query('diff') !== 'hidden';
         if ($showDiff && $selected !== null) {
             $directory = $scanner->repositoryDirectory($root, $relative);
             abort_if($directory === null, 404);
+            $version = IndexActions::version($directory, $selected, $repositories[$relative]->branch);
             foreach (array_keys($selected->sections) as $section) {
                 $previews[$section] = $diff->preview($directory, $selected, $section);
             }
         }
 
-        $revision = $allChanges ? null : hash('sha256', serialize([$repositories, $fileId, $grouped, $showDiff, $previews]));
+        $revision = $allChanges ? null : hash('sha256', serialize([$repositories, $fileId, $grouped, $showDiff, $previews, $version]));
         if ($revision !== null && $request->header('X-GitoBob-Revision') === $revision) {
             return response('', 204);
         }
@@ -97,7 +100,7 @@ final class RepositoryController
             'rootName' => basename($root) ?: '/', 'relative' => $relative, 'repositories' => $repositories,
             'allChanges' => $allChanges, 'total' => array_sum(array_column($repositories, 'changedFiles')),
             'grouped' => $grouped, 'groups' => $groups, 'fileId' => $fileId, 'selected' => $selected,
-            'revision' => $revision, 'slot' => $slot, 'showDiff' => $showDiff, 'previews' => $previews, 'onlyChanged' => $request->boolean('changed'),
+            'version' => $version, 'revision' => $revision, 'slot' => $slot, 'showDiff' => $showDiff, 'previews' => $previews, 'onlyChanged' => $request->boolean('changed'),
         ]);
         if ($request->has('layout')) {
             $response->withCookie(cookie()->forever('file_layout', $grouped ? 'grouped' : 'all'));

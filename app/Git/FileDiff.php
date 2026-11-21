@@ -14,7 +14,7 @@ final class FileDiff
         $command = [
             'git', '--no-pager', '--no-optional-locks', '--literal-pathspecs', '-c', 'core.fsmonitor=false',
             '--git-dir=.git', '--work-tree=.', 'diff', '--no-color', '--no-ext-diff', '--no-textconv',
-            '--submodule=short',
+            '--submodule=short', '--src-prefix=a/', '--dst-prefix=b/', '--unified=3',
         ];
 
         if ($section === 'Untracked') {
@@ -33,6 +33,17 @@ final class FileDiff
             }
         }
 
+        return $this->read($command, $directory, $section === 'Untracked');
+    }
+
+    public function staged(string $directory): string
+    {
+        return $this->read(['git', 'diff', '--cached', '--no-color', '--no-ext-diff', '--no-textconv'], $directory, false);
+    }
+
+    /** @param list<string> $command */
+    private function read(array $command, string $directory, bool $noIndex): string
+    {
         $process = new Process($command, $directory);
         $preview = '';
         try {
@@ -52,7 +63,7 @@ final class FileDiff
             return 'Git took too long to generate this diff.';
         }
 
-        if (! $process->isSuccessful() && ! ($section === 'Untracked' && $process->getExitCode() === 1)) {
+        if (! $process->isSuccessful() && ! ($noIndex && $process->getExitCode() === 1)) {
             return 'Git could not read this diff. Refresh the repository to check its current state.';
         }
 

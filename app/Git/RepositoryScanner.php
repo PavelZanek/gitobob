@@ -3,6 +3,7 @@
 namespace App\Git;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Discover working trees independently of the parent repository's ignore rules.
@@ -47,6 +48,14 @@ final class RepositoryScanner
         Cache::put($key, ['tree' => $tree], now()->addMinutes(5));
 
         return $tree;
+    }
+
+    public function forgetWorkspace(): void
+    {
+        $root = Storage::disk('local')->get('workspace.path');
+        if (is_string($root)) {
+            Cache::forget('workspace-tree-v1:'.hash('sha256', $root));
+        }
     }
 
     public function scan(string $directory): ?RepositoryFolder

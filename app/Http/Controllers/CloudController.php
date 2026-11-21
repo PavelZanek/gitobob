@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Native\Desktop\Facades\Shell;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final class CloudController
 {
@@ -187,6 +188,35 @@ final class CloudController
 
         return redirect()->route('cloud.pull', ['repository' => $repository, 'number' => $number, 'snapshot' => 1,
             'file' => $request->boolean('hide') ? null : $data['id']] + $request->only('filter', 'hide', 'page', 'slot'));
+    }
+
+    public function comment(Request $request, GitHubClient $github, int $number): RedirectResponse
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $data = $request->validate([
+            'comment' => ['required', 'string', 'max:65536'],
+            'scope' => ['required', 'string', 'size:64'],
+            'submission' => ['required', 'uuid'],
+        ]);
+        $back = to_route('cloud.pull', ['repository' => $repository, 'number' => $number, 'snapshot' => 1]
+            + $request->only('page', 'file', 'filter', 'hide'));
+        try {
+            $scope = hash('sha256', $github->reviewKey($repository, $number));
+            abort_unless(hash_equals($scope, $data['scope']), 409);
+            if (! Cache::add('pr-comment:'.$scope.':'.$data['submission'], true, now()->addDay())) {
+                return $back->with('notice', 'This submission was already received. Check the PR conversation.');
+            }
+            $github->postComment($repository, $number, $data['comment']);
+        } catch (RuntimeException $exception) {
+            if ($exception instanceof HttpExceptionInterface) {
+                throw $exception;
+            }
+
+            return $back->withInput($request->only('comment'))->with('notice', $exception->getMessage());
+        }
+
+        return $back->with('posted', $scope)->with('notice', 'Comment posted to GitHub.');
     }
 
     public function openPull(Request $request, int $number): Response

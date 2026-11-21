@@ -213,3 +213,9 @@ const cancelRefresh = enableFocusRefresh(initializePageReview, () => Boolean(act
 window.addEventListener('blur', discardPreload);
 window.Native?.on('Native\\Desktop\\Events\\Windows\\WindowBlurred', discardPreload);
 document.addEventListener('visibilitychange', () => { if (document.hidden) discardPreload(); });
+
+document.addEventListener('submit', event => {
+    if (event.target.matches('[data-index-form]')) {
+        event.target.elements.filter.value = document.querySelector('.file-filter input')?.value ?? '';
+    }
+});

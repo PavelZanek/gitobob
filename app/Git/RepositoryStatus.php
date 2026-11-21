@@ -75,6 +75,7 @@ final readonly class RepositoryStatus
 
             $id = hash('sha256', $path);
             $file = $files[$id] ??= new ChangedFile($path);
+            $file->statusRecord = $record;
             if ($type === '?') {
                 $file->sections['Untracked'] = '?';
             } elseif ($type === 'u') {

@@ -27,9 +27,22 @@
                 <a class="button-link" href="{{ route('cloud.pull', $query + ['page' => $page, 'file' => $file]) }}">Refresh</a>
             </div>
         </section>
+        @if (session('notice'))<p role="status" class="action-notice">{{ session('notice') }}</p>@endif
         @isset($error)
             <p class="empty" role="alert">{{ $error }}</p>
         @else
+            <details class="panel comment-box" data-comment-draft="{{ hash('sha256', $scope) }}" @if(session('posted') === hash('sha256', $scope)) data-posted @endif @if(old('comment') || $errors->has('comment')) open @endif>
+                <summary>Comment on pull request</summary>
+                <form class="write-form" method="post" action="{{ route('cloud.pull.comment', $query + ['file' => $selected['id'] ?? null, 'page' => $page]) }}">
+                    @csrf
+                    <input type="hidden" name="scope" value="{{ hash('sha256', $scope) }}">
+                    <input type="hidden" name="submission" value="{{ Str::uuid() }}">
+                    <label for="pr-comment">Comment on {{ $repository }} #{{ $number }}</label>
+                    <textarea id="pr-comment" name="comment" rows="3" required maxlength="65536">{{ old('comment') }}</textarea>
+                    @error('comment')<p role="alert">{{ $message }}</p>@enderror
+                    <button>Post comment</button>
+                </form>
+            </details>
             <section class="panel" aria-label="Changed files">
                 <div class="toolbar">
                     <h2>Changed files ({{ $count }})</h2>

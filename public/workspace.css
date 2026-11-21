@@ -158,3 +158,15 @@ header .app-modes { margin-left: auto; }
 .review-progress { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 15px 10px; color: var(--muted); font-size: 12px; }
 .review-progress .button-link { color: var(--accent); }
 .patch .current-hunk { box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
+.index-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.index-actions h3 { margin: 0; font-size: inherit; }
+.action-notice { color: var(--accent); margin: 8px 0; }
+.index-actions form { display: flex; align-items: center; gap: 8px; }
+.hunk-action { margin-inline-start: 12px; padding: 2px 7px; font: 11px var(--sans, sans-serif); }
+.commit-summary { margin: 0; overflow: auto; padding: 12px 16px; font: 12px/1.6 var(--mono); }
+.write-form { display: grid; gap: 8px; padding: 14px 16px; }
+.write-form label { font-weight: 600; }
+.write-form textarea { box-sizing: border-box; width: 100%; padding: 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; font: inherit; }
+.write-form button { justify-self: start; }
+.comment-box { margin-bottom: 12px; }
+.comment-box > summary { padding: 10px 16px; font-weight: 600; }
