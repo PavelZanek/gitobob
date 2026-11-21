@@ -120,7 +120,7 @@ final class GitHubClient
     public function pullMetadata(string $repository, int $number): array
     {
         $endpoint = 'repos/'.$repository.'/pulls/'.$number;
-        [$pull] = $this->read($endpoint, '[{title, head:.head.label, base:.base.ref, base_sha:.base.sha, head_sha:.head.sha, changed_files}]', false);
+        [$pull] = $this->read($endpoint, '[{title, draft, head:.head.label, base:.base.ref, base_sha:.base.sha, head_sha:.head.sha, changed_files}]', false);
 
         return $pull;
     }
@@ -140,6 +140,32 @@ final class GitHubClient
         }
 
         return $files;
+    }
+
+    public function createPull(string $repository, string $base, string $source, string $head, string $title, string $body, bool $draft): int
+    {
+        $payload = compact('base', 'head', 'title', 'body', 'draft');
+        if (strcasecmp($source, $repository) !== 0) {
+            [$owner, $name] = explode('/', $source, 2);
+            $payload['head'] = $owner.':'.$head;
+            $payload['head_repo'] = $name;
+        }
+        try {
+            $result = Process::timeout(30)->env(['GH_PROMPT_DISABLED' => '1', 'GH_NO_UPDATE_NOTIFIER' => '1'])
+                ->input(json_encode($payload, JSON_THROW_ON_ERROR))
+                ->run([$this->binary(), 'api', '--hostname', 'github.com', '--method', 'POST', '--input', '-', '--jq', '.number', 'repos/'.$repository.'/pulls']);
+        } catch (ProcessTimedOutException) {
+            throw new RuntimeException('GitHub did not confirm creation. Your text is saved. Retry to check for an existing pull request.', 503);
+        }
+        if (! $result->successful() && str_contains(strtolower($result->errorOutput()), 'draft pull requests are not supported')) {
+            throw new RuntimeException('GitHub does not support draft pull requests for this repository. Your text is saved.', 422);
+        }
+        $number = filter_var(trim($result->output()), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if (! $result->successful() || $number === false) {
+            throw new RuntimeException('GitHub could not confirm creation. Your text is saved. Check access and retry to look up the pull request.', 503);
+        }
+
+        return $number;
     }
 
     public function postComment(string $repository, int $number, string $body): void

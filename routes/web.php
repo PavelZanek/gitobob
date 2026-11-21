@@ -19,6 +19,7 @@ Route::post('/workspace', [WorkspaceController::class, 'choose'])->name('workspa
 Route::get('/repository', RepositoryController::class)->name('repository');
 Route::get('/repository/compare', [CompareController::class, 'index'])->name('repository.compare');
 Route::match(['get', 'post'], '/repository/compare/action', [CompareController::class, 'action'])->name('repository.compare.action');
+Route::match(['get', 'post'], '/repository/compare/compose', [CompareController::class, 'compose'])->name('repository.compare.compose');
 Route::get('/repository/history', HistoryController::class)->name('repository.history');
 Route::get('/repository/branches', [IndexController::class, 'branches'])->name('repository.branches');
 Route::post('/repository/branches', [IndexController::class, 'changeBranch'])->name('repository.branches.change');

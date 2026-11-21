@@ -78,7 +78,7 @@ final class BranchComparison
 
     /**
      * @param  Pair  $pair
-     * @return array{label:string, message:string, url?:string, sync?:bool}
+     * @return array{label:string, message:string, url?:string, sync?:bool, repository?:string, source?:string, number?:int}
      */
     public function action(string $directory, array $pair, GitHubClient $github): array
     {
@@ -111,13 +111,13 @@ final class BranchComparison
             return ['label' => $push ? 'Push…' : 'Sync…', 'sync' => true, 'message' => $push ? 'Publish your local commits before opening the pull request.' : 'Review the branch and its remote before opening the pull request.'];
         }
         if ($number !== null) {
-            return ['label' => 'Open pull request', 'message' => '#'.$number, 'url' => 'https://github.com/'.$repo.'/pull/'.$number];
+            return ['label' => 'Open pull request', 'message' => '#'.$number, 'number' => $number, 'repository' => $repo, 'url' => 'https://github.com/'.$repo.'/pull/'.$number];
         }
         if ($github->branchTip($repo, $base['target']) !== $base['oid']) {
             return ['label' => '', 'message' => 'The base on GitHub differs from this comparison. Sync the base branch and compare again.'];
         }
         $prefix = strcasecmp($source, $repo) === 0 ? '' : str_replace('/', ':', $source).':';
 
-        return ['label' => 'Create pull request…', 'message' => '', 'url' => 'https://github.com/'.$repo.'/compare/'.rawurlencode($base['target']).'...'.$prefix.rawurlencode($head['target']).'?expand=1'];
+        return ['label' => 'Create pull request…', 'repository' => $repo, 'source' => $source, 'message' => '', 'url' => 'https://github.com/'.$repo.'/compare/'.rawurlencode($base['target']).'...'.$prefix.rawurlencode($head['target']).'?expand=1'];
     }
 }

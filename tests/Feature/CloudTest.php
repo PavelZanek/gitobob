@@ -148,6 +148,8 @@ it('navigates both ways across pages and filters paths across the entire pull re
     });
     $url = '/cloud/pulls/4?repository=sample/review';
     $this->get($url.'&edge=last')->assertOk()->assertSee('File 30 of 34')->assertSee('+line30');
+    $this->get($url.'&locate=1&file='.hash('sha256', 'tests/file34.php'))->assertSee('File 34 of 34')->assertSee('+line34');
+    $this->get($url.'&locate=1&file='.hash('sha256', 'removed.md'))->assertSee('File 1 of 34')->assertSee('+line1');
     $this->get($url.'&page=2')->assertSee('File 31 of 34')->assertSee('+line31')->assertSee('edge=last');
     $this->get($url.'&page=2&edge=last')->assertSee('File 34 of 34')->assertDontSee('data-step="j"', false);
     $this->get($url.'&filter=TESTS%2F&edge=last')->assertOk()->assertSee('File 17 of 17')->assertSee('+line34')->assertDontSee('file31.php');

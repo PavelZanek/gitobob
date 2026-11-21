@@ -81,9 +81,10 @@ final class CloudController
         $filtered = trim($filter) !== '' || $hide;
         $last = $request->query('edge') === 'last';
         $resume = $request->boolean('resume');
+        $locate = $file !== null && $request->boolean('locate');
         $preview = $request->header('X-GitoBob-Preview') === '1';
         $refresh = $request->hasHeader('X-GitoBob-Revision');
-        $source = $filtered || $resume || $refresh ? 1 : $page;
+        $source = $filtered || $resume || $locate || $refresh ? 1 : $page;
 
         try {
             $scope = $github->reviewKey($repository, $number);
@@ -106,7 +107,7 @@ final class CloudController
             $available = $total;
             $reconcile = $marks !== [] && ($state['revision'] ?? null) !== $revision;
             $all = $entries;
-            if ($total > $size && ($filtered || $resume || $reconcile || $refresh)) {
+            if ($total > $size && ($filtered || $resume || $locate || $reconcile || $refresh)) {
                 $all = $review->index($scope, $repository, $number, $detail['pull']);
             }
             if ($reconcile && $total <= $size && $source !== 1) {
@@ -116,14 +117,14 @@ final class CloudController
                 ? array_diff_assoc($marks, array_column($all, 'version', 'id')) : [];
             $marks = array_diff_assoc($marks, $outdated);
 
-            if ($resume || $filtered || $refresh) {
+            if ($resume || $filtered || $locate || $refresh) {
                 $entries = $all;
                 $entries = array_values(array_filter($entries, static fn (array $entry): bool => (! $hide || ($marks[$entry['id']] ?? null) !== $entry['version'])
                     && (mb_stripos($entry['filename'], trim($filter)) !== false
                         || mb_stripos($entry['previous_filename'] ?? '', trim($filter)) !== false)
                 ));
                 $total = count($entries);
-                if ($refresh) {
+                if ($refresh || $locate) {
                     $cursor = array_search($file, array_column($entries, 'id'), true);
                     if ($cursor === false) {
                         $cursor = min(($page - 1) * $size + max(0, min($size - 1, $request->integer('slot'))), max(0, $total - 1));

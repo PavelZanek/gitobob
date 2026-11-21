@@ -20,7 +20,7 @@
         <section class="heading">
             <div>
                 <h1>{{ $detail['pull']['title'] ?? 'Pull request' }}</h1>
-                <p class="repository-meta">#{{ $number }} @if ($detail) · {{ $detail['pull']['head'] }} → {{ $detail['pull']['base'] }} @endif</p>
+                <p class="repository-meta">#{{ $number }} @if ($detail) · {{ ($detail['pull']['draft'] ?? false) ? 'Draft' : 'Ready for review' }} · {{ $detail['pull']['head'] }} → {{ $detail['pull']['base'] }} @endif</p>
             </div>
             <div class="actions">
                 <form method="post" action="{{ route('cloud.pull.open', $base) }}">@csrf<button>Open on GitHub</button></form>
