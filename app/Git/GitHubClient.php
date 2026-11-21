@@ -55,6 +55,20 @@ final class GitHubClient
         return 'github-overview:'.hash('sha256', strtolower(trim($account->output()).':'.$repository));
     }
 
+    /** @throws RuntimeException */
+    public function reviewKey(string $repository, int $number): string
+    {
+        $scope = $repository.'/pull/'.$number;
+        $key = $this->cacheKey($scope);
+        if ($key !== null) {
+            return $key;
+        }
+
+        [$login] = $this->read('user', '[.login]', false);
+
+        return 'github-overview:'.hash('sha256', strtolower($login.':'.$scope));
+    }
+
     /** @return array<string, mixed> */
     public function overview(?string $repository): array
     {
@@ -77,11 +91,26 @@ final class GitHubClient
     public function pullRequest(string $repository, int $number, int $page): array
     {
         $endpoint = 'repos/'.$repository.'/pulls/'.$number;
-        [$pull] = $this->read($endpoint, '[{title, head:.head.label, base:.base.ref, changed_files}]', false);
-        $files = $this->read($endpoint.'/files?per_page='.self::FILES_PER_PAGE.'&page='.$page,
-            'map({filename, previous_filename, status, additions, deletions, patch: (.patch // "")[:65536], limited: ((.patch // "") | length > 65536)})', false);
+        [$pull] = $this->read($endpoint, '[{title, head:.head.label, base:.base.ref, base_sha:.base.sha, head_sha:.head.sha, changed_files}]', false);
 
-        return ['pull' => $pull, 'files' => $files];
+        return ['pull' => $pull, 'files' => $this->filePage($endpoint, $page, self::FILES_PER_PAGE)];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     *
+     * @throws RuntimeException
+     */
+    public function filePage(string $endpoint, int $page, int $size): array
+    {
+        $files = $this->read($endpoint.'/files?per_page='.$size.'&page='.$page,
+            'map({filename, previous_filename, sha, status, additions, deletions, patch: (.patch // "")[:65536], limited: ((.patch // "") | length > 65536)})', false);
+        foreach ($files as &$entry) {
+            $entry['id'] = hash('sha256', $entry['filename']);
+            $entry['version'] = hash('sha256', json_encode($entry, JSON_THROW_ON_ERROR));
+        }
+
+        return $files;
     }
 
     /** @return list<mixed> */

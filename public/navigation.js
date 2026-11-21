@@ -56,7 +56,7 @@ function prefetch(event) {
 
 document.addEventListener('pointerover', prefetch);
 document.addEventListener('focusin', prefetch);
-document.addEventListener('click', async event => {
+document.addEventListener('click', event => {
     const link = event.target.closest('a[href]');
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey ||
         event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
@@ -64,6 +64,11 @@ document.addEventListener('click', async event => {
     if (next.origin !== location.origin || (next.hash && next.pathname === location.pathname && next.search === location.search)) return;
     event.preventDefault();
 
+    navigate(next);
+});
+
+async function navigate(next, filterField = null) {
+    clearTimeout(filterTimer);
     activeRequest?.abort();
     const warm = preload?.url === next.href && performance.now() < preload.until ? preload : null;
     if (!warm) preload?.controller.abort();
@@ -83,7 +88,10 @@ document.addEventListener('click', async event => {
             ? document.querySelector('.review-files')?.scrollTop ?? 0
             : 0;
         resetNavigation();
-        if (target.href !== location.href) history.pushState(null, '', target);
+        if (target.href !== location.href) {
+            if (filterField) history.replaceState(null, '', target);
+            else history.pushState(null, '', target);
+        }
         document.querySelector('header').replaceWith(loaded.page.querySelector('header'));
         document.querySelector('main').replaceWith(main);
         document.body.className = loaded.page.body.className;
@@ -93,7 +101,12 @@ document.addEventListener('click', async event => {
         const files = main.querySelector('.review-files');
         if (files) files.scrollTop = scrollTop;
         main.tabIndex = -1;
-        main.focus({ preventScroll: true });
+        const focus = filterField && document.activeElement === document.body
+            ? main.querySelector(`[data-pull-filter] [name="${filterField}"]`) : null;
+        (focus ?? main).focus({ preventScroll: true });
+        if (focus?.type === 'search') focus.setSelectionRange(filterCursor, filterCursor);
+        const current = files?.querySelector('[aria-current=true]');
+        if (current && main.querySelector('[data-pull-filter]')) current.scrollIntoView({ block: 'nearest' });
         const anchor = target.hash && document.getElementById(target.hash.slice(1));
         if (anchor) anchor.scrollIntoView({ block: 'nearest' });
         else window.scrollTo(0, 0);
@@ -105,9 +118,36 @@ document.addEventListener('click', async event => {
             resetNavigation();
         }
     }
+}
+
+let filterTimer;
+let filterCursor = 0;
+
+function applyPullFilter(form, field) {
+    const url = new URL(form.action);
+    url.search = new URLSearchParams(new FormData(form));
+    if (!url.searchParams.get('filter')) url.searchParams.delete('filter');
+    navigate(url, field);
+}
+
+document.addEventListener('input', event => {
+    const form = event.target.closest('[data-pull-filter]');
+    if (!form) return;
+    cancelNavigation();
+    if (event.isComposing) return;
+    const field = event.target.name;
+    filterCursor = event.target.selectionStart ?? 0;
+    filterTimer = setTimeout(() => applyPullFilter(form, field), field === 'hide' ? 0 : 180);
+});
+
+document.addEventListener('submit', event => {
+    if (!event.target.matches('[data-pull-filter]')) return;
+    event.preventDefault();
+    applyPullFilter(event.target, 'filter');
 });
 
 function cancelNavigation() {
+    clearTimeout(filterTimer);
     activeRequest?.abort();
     preload?.controller.abort();
     activeRequest = preload = null;
@@ -119,9 +159,17 @@ window.addEventListener('popstate', () => {
     cancelNavigation();
     location.reload();
 });
-document.addEventListener('submit', cancelNavigation);
+document.addEventListener('submit', event => { if (!event.defaultPrevented) cancelNavigation(); });
 window.addEventListener('keydown', event => {
     if (event.key === 'Escape') cancelNavigation();
+    if (event.defaultPrevented || event.repeat || event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey ||
+        event.target.isContentEditable || event.target.closest('input, textarea, select')) return;
+    if (event.key !== 'j' && event.key !== 'k') return;
+    const step = document.querySelector(`[data-step="${event.key}"]`);
+    if (step && !activeRequest) {
+        event.preventDefault();
+        step.click();
+    }
 });
 initializeReview();
 initializeCloud();

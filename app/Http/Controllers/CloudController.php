@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Git\GitHubClient;
+use App\Git\PullRequestReview;
 use App\Git\RepositoryScanner;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Native\Desktop\Facades\Shell;
 use RuntimeException;
@@ -58,47 +59,88 @@ final class CloudController
         return response()->view('cloud-data', compact('repository', 'snapshot'))->header('Cache-Control', 'no-store');
     }
 
-    public function pull(Request $request, GitHubClient $github, int $number): Response
+    public function pull(Request $request, GitHubClient $github, PullRequestReview $review, int $number): Response
     {
         $repository = $this->repository($request);
         abort_if($repository === null, 404);
         $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT);
-        abort_unless(is_int($page) && $page >= 1 && $page <= ceil(GitHubClient::MAX_PR_FILES / GitHubClient::FILES_PER_PAGE), 404);
+        $size = GitHubClient::FILES_PER_PAGE;
+        abort_unless(is_int($page) && $page >= 1 && $page <= ceil(GitHubClient::MAX_PR_FILES / $size), 404);
         $file = $request->query('file');
         abort_unless($file === null || (is_string($file) && preg_match('/^[a-f0-9]{64}$/D', $file)), 404);
-        $key = $github->cacheKey($repository.'/pull/'.$number.'/page/'.$page);
-        $cached = $request->boolean('snapshot') && $key !== null ? Cache::get($key) : null;
-        $error = null;
-        $detail = null;
+        $filter = $request->query('filter') ?? '';
+        abort_unless(is_string($filter) && mb_strlen($filter) <= 1024, 404);
+        $hide = $request->boolean('hide');
+        $filtered = trim($filter) !== '' || $hide;
+        $last = $request->query('edge') === 'last';
+        $source = $filtered ? 1 : $page;
+
         try {
-            if (is_string($cached)) {
-                $detail = json_decode(Crypt::decryptString($cached), true, flags: JSON_THROW_ON_ERROR);
-            } else {
-                $detail = $github->pullRequest($repository, $number, $page);
-                if ($key !== null) {
-                    Cache::put($key, Crypt::encryptString(json_encode($detail, JSON_THROW_ON_ERROR)), now()->addMinutes(2));
+            $scope = $github->reviewKey($repository, $number);
+            $detail = $review->detail($scope, $repository, $number, $source, $request->boolean('snapshot'));
+            $marks = $review->marks($scope);
+            $count = (int) $detail['pull']['changed_files'];
+            $total = min($count, GitHubClient::MAX_PR_FILES);
+            $entries = $detail['files'];
+            if ($filtered) {
+                if ($total > $size) {
+                    $entries = $review->index($scope, $repository, $number, $detail['pull']);
                 }
+                $entries = array_values(array_filter($entries, static fn (array $entry): bool => (! $hide || ($marks[$entry['id']] ?? null) !== $entry['version'])
+                    && (mb_stripos($entry['filename'], trim($filter)) !== false
+                        || mb_stripos($entry['previous_filename'] ?? '', trim($filter)) !== false)
+                ));
+                $total = count($entries);
+                $lastPage = max(1, (int) ceil($total / $size));
+                $last = $last || $page > $lastPage;
+                $page = min($page, $lastPage);
+                $entries = array_slice($entries, ($page - 1) * $size, $size);
             }
+            $files = array_column($entries, null, 'id');
+            $ids = array_keys($files);
+            $slot = $last ? count($ids) - 1 : min(max(0, $request->integer('slot')), count($ids) - 1);
+            $id = $file ?? ($ids[$slot] ?? null);
+            $selected = $files[$id] ?? null;
+            if (isset($selected['source_page'])) {
+                $patchPage = $selected['source_page'] === $source ? $detail
+                    : $review->detail($scope, $repository, $number, $selected['source_page'], true, $review->revision($detail['pull']));
+                $selected = array_column($patchPage['files'], null, 'id')[$id] ?? null;
+            }
+            $position = array_search($id, $ids, true);
+            $pages = (int) ceil($total / $size);
+
+            return response()->view('cloud-pull', compact('repository', 'number', 'detail', 'files', 'selected', 'count', 'page', 'pages', 'file', 'filter', 'hide', 'total', 'position', 'ids', 'size', 'marks', 'scope'))
+                ->header('Cache-Control', 'no-store');
         } catch (RuntimeException $exception) {
             if (! in_array($exception->getCode(), [401, 403, 503], true)) {
                 throw $exception;
             }
-            if ($key !== null) {
-                Cache::forget($key);
-            }
-            $error = $exception->getMessage();
-        }
 
-        $files = [];
-        foreach ($detail['files'] ?? [] as $entry) {
-            $files[hash('sha256', $entry['filename'])] = $entry;
+            return response()->view('cloud-pull', ['error' => $exception->getMessage(), 'detail' => null, 'repository' => $repository, 'number' => $number,
+                'page' => $page, 'file' => $file, 'filter' => $filter, 'hide' => $hide])->header('Cache-Control', 'no-store');
         }
-        $selected = $files[$file ?? array_key_first($files)] ?? null;
-        $count = $detail['pull']['changed_files'] ?? 0;
-        $pages = (int) ceil(min($count, GitHubClient::MAX_PR_FILES) / GitHubClient::FILES_PER_PAGE);
+    }
 
-        return response()->view('cloud-pull', compact('repository', 'number', 'detail', 'files', 'selected', 'count', 'page', 'pages', 'file', 'error'))
-            ->header('Cache-Control', 'no-store');
+    public function viewed(Request $request, GitHubClient $github, PullRequestReview $review, int $number): RedirectResponse
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $data = $request->validate([
+            'scope' => ['required', 'string', 'size:64'],
+            'id' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/D'],
+            'version' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/D'],
+            'viewed' => ['required', 'boolean'],
+            'filter' => ['nullable', 'string', 'max:1024'],
+            'hide' => ['nullable', 'boolean'],
+            'page' => ['integer', 'min:1', 'max:100'],
+            'slot' => ['integer', 'min:0', 'max:29'],
+        ]);
+        $scope = $github->reviewKey($repository, $number);
+        abort_unless(hash_equals(hash('sha256', $scope), $data['scope']), 409);
+        $review->mark($scope, $data['id'], $data['version'], $request->boolean('viewed'));
+
+        return redirect()->route('cloud.pull', ['repository' => $repository, 'number' => $number, 'snapshot' => 1,
+            'file' => $request->boolean('hide') ? null : $data['id']] + $request->only('filter', 'hide', 'page', 'slot'));
     }
 
     public function openPull(Request $request, int $number): Response

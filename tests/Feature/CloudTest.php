@@ -122,3 +122,66 @@ it('opens the selected pull request on GitHub in the system browser', function (
     $this->post('/cloud/pulls/4/open?repository=example/private')->assertNoContent();
     $shell->assertOpenedExternal('https://github.com/example/private/pull/4/files');
 });
+
+it('navigates both ways across pages and filters paths across the entire pull request', function (): void {
+    $files = [];
+    foreach (range(1, 34) as $i) {
+        $path = $i % 2 === 0 ? 'tests' : 'src';
+        $files[] = ['filename' => "$path/file$i.php", 'previous_filename' => null, 'sha' => "blob$i", 'status' => 'added',
+            'additions' => 1, 'deletions' => 0, 'limited' => false, 'patch' => "+line$i"];
+    }
+    Process::fake(function (PendingProcess $process) use ($files) {
+        if ($process->command[1] === 'config') {
+            return Process::result('reviewer');
+        }
+        $data = match (end($process->command)) {
+            'repos/sample/review/pulls/4' => [['title' => 'Multi-page PR', 'head' => 'topic', 'base' => 'dev', 'changed_files' => 34]],
+            'repos/sample/review/pulls/4/files?per_page=100&page=1' => $files,
+            'repos/sample/review/pulls/4/files?per_page=30&page=1' => array_slice($files, 0, 30),
+            'repos/sample/review/pulls/4/files?per_page=30&page=2' => array_slice($files, 30),
+        };
+
+        return Process::result(json_encode($data, JSON_THROW_ON_ERROR));
+    });
+    $url = '/cloud/pulls/4?repository=sample/review';
+    $this->get($url.'&edge=last')->assertOk()->assertSee('File 30 of 34')->assertSee('+line30');
+    $this->get($url.'&page=2')->assertSee('File 31 of 34')->assertSee('+line31')->assertSee('edge=last');
+    $this->get($url.'&page=2&edge=last')->assertSee('File 34 of 34')->assertDontSee('data-step="j"', false);
+    $this->get($url.'&filter=TESTS%2F&edge=last')->assertOk()->assertSee('File 17 of 17')->assertSee('+line34')->assertDontSee('file31.php');
+    $this->get($url.'&filter=missing')->assertOk()->assertSee('No files match your filters.');
+});
+
+it('persists viewed versions per account and makes edited files unread again', function (): void {
+    Storage::fake('local');
+    $login = 'reader';
+    $sha = 'old-blob';
+    Process::fake(function (PendingProcess $process) use (&$login, &$sha) {
+        if ($process->command[1] === 'config') {
+            return Process::result($login);
+        }
+        $data = str_contains(end($process->command), '/files?')
+            ? [['filename' => 'logo.png', 'previous_filename' => null, 'sha' => $sha, 'status' => 'modified',
+                'additions' => 0, 'deletions' => 0, 'limited' => false, 'patch' => '']]
+            : [['title' => 'Update logo', 'head' => 'topic', 'base' => 'dev', 'changed_files' => 1]];
+
+        return Process::result(json_encode($data, JSON_THROW_ON_ERROR));
+    });
+
+    $url = '/cloud/pulls/4?repository=sample/review';
+    $mark = '/cloud/pulls/4/viewed?repository=sample/review';
+    $page = $this->get($url)->assertSee('Mark as viewed');
+    $payload = ['scope' => hash('sha256', $page->viewData('scope')), 'id' => $page->viewData('selected')['id'],
+        'version' => $page->viewData('selected')['version'], 'viewed' => 1];
+    $this->post($mark, $payload)->assertRedirect();
+    $this->get($url)->assertOk()->assertSee('✓ Viewed');
+    $this->get($url.'&hide=1')->assertSee('No files match your filters.');
+    $this->post($mark, ['viewed' => 0] + $payload)->assertRedirect();
+    $this->get($url.'&hide=1')->assertSee('Mark as viewed');
+    $this->post($mark, $payload);
+    $login = 'another-reader';
+    $this->get($url)->assertSee('Mark as viewed');
+    $this->post($mark, $payload)->assertConflict();
+    $login = 'reader';
+    $sha = 'changed-blob';
+    $this->get($url.'&hide=1')->assertOk()->assertSee('logo.png')->assertSee('Mark as viewed');
+});
