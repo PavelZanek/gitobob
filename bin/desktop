@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+runtime=vendor/nativephp/desktop/resources/electron
+electron="$runtime/node_modules/electron/install.js"
+if [ ! -f "$electron" ]; then
+    npm --prefix "$runtime" install
+fi
+node "$electron"
+exec php artisan native:run --no-dependencies --no-queue "$@"

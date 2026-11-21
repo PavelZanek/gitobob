@@ -1,0 +1,24 @@
+:root { color-scheme: light dark; --paper: #f6f7f4; --panel: #fff; --ink: #192823; --muted: #586760; --line: #d4dcd5; --accent: #176145; --tag: #e5f2eb; }
+@media (prefers-color-scheme: dark) { :root { --paper: #18201e; --panel: #212c28; --ink: #f1f5ef; --muted: #b5c4ba; --line: #40504a; --accent: #92dfb7; --tag: #2d4439; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px -apple-system, BlinkMacSystemFont, sans-serif; }
+header { display: flex; align-items: baseline; gap: 20px; padding: 18px 5vw; border-bottom: 1px solid var(--line); background: var(--panel); }
+header strong { font-size: 22px; letter-spacing: -.05em; }
+header span, p { color: var(--muted); }
+main { max-width: 980px; margin: 42px auto; padding: 0 5vw; }
+.heading, .toolbar { display: flex; gap: 18px; align-items: center; justify-content: space-between; }
+h1 { margin: 0; font-size: clamp(26px, 4vw, 38px); letter-spacing: -.045em; }
+h2 { margin: 0; font-size: 17px; }
+.path { margin: 8px 0 0; font: 13px ui-monospace, monospace; overflow-wrap: anywhere; }
+button { background: var(--accent); color: var(--paper); font: inherit; font-weight: 600; padding: 10px 16px; border: 0; border-radius: 7px; white-space: nowrap; cursor: pointer; }
+a { color: var(--accent); text-underline-offset: 3px; }
+.panel, .empty { margin-top: 28px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: auto; }
+.toolbar, .empty { padding: 20px 24px; }
+.toolbar { border-bottom: 1px solid var(--line); }
+ul { list-style: none; }
+.tree { margin: 12px 24px 20px; padding: 0; }
+.tree ul { margin-left: 7px; padding-left: 20px; border-left: 1px solid var(--line); }
+summary, .leaf { padding: 7px 0; overflow-wrap: anywhere; }
+summary { cursor: pointer; }
+small { display: inline-block; margin-left: 10px; padding: 2px 6px; border-radius: 4px; background: var(--tag); color: var(--accent); font: 11px ui-monospace, monospace; }
+@media (max-width: 540px) { .heading { align-items: start; flex-direction: column; } }

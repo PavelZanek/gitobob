@@ -1,0 +1,15 @@
+services:
+  laravel.test:
+    image: sail-8.4/app
+    network_mode: bridge
+    build:
+      context: ./vendor/laravel/sail/runtimes/8.4
+      args:
+        WWWGROUP: '${WWWGROUP:-20}'
+    environment:
+      WWWUSER: '${WWWUSER:-501}'
+      LARAVEL_SAIL: 1
+      XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+    volumes:
+      - '.:/var/www/html'
+    command: sleep infinity

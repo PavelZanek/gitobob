@@ -1,0 +1,75 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "pavelzanek/gitobob",
+    "type": "project",
+    "description": "Lokální přehled Git repozitářů pro macOS.",
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "laravel/framework": "^13.17",
+        "nativephp/desktop": "^2.5"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3",
+        "laravel/boost": "^2",
+        "laravel/pint": "^1.27",
+        "laravel/sail": "^1",
+        "mockery/mockery": "^1.6",
+        "pestphp/pest": "^4",
+        "pestphp/pest-plugin-type-coverage": "^4",
+        "rector/rector": "^2"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "pre-package-uninstall": [
+            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ],
+        "test:ci": [
+            "rector process --dry-run",
+            "pint --test",
+            "phpstan analyse --memory-limit=1G",
+            "pest --type-coverage --min=100",
+            "@putenv XDEBUG_MODE=coverage",
+            "pest --coverage --min=85"
+        ],
+        "native:dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "bin/desktop"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
