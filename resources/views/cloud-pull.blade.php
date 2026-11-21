@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{ $preferences->theme }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,7 +8,7 @@
     <title>{{ $repository }} #{{ $number }} · GitoBob</title>
 </head>
 <body class="review-page">
-    <header><strong>GitoBob</strong><a href="{{ route('cloud', ['repository' => $repository]) }}">{{ $repository }}</a>@include('modes')</header>
+    <header><strong>GitoBob</strong><a href="{{ route('cloud', ['repository' => $repository]) }}">{{ $repository }}</a>@include('modes')<a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
     @php
         $base = ['number' => $number, 'repository' => $repository];
         $query = $base + ['filter' => $filter !== '' ? $filter : null, 'hide' => $hide ?: null];

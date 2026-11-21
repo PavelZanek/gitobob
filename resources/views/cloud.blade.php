@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{ $preferences->theme }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,7 +8,7 @@
     <title>{{ $repository ?? 'GitHub repositories' }} · GitoBob</title>
 </head>
 <body>
-    <header><strong>GitoBob</strong><span>GitHub</span>@include('modes')</header>
+    <header><strong>GitoBob</strong><span>GitHub</span>@include('modes')<a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
     <main data-cloud-url="{{ route('cloud.data', ['repository' => $repository]) }}">
         <section class="heading">
             <h1>{{ $repository ?? 'GitHub repositories' }}</h1>

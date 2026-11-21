@@ -2,12 +2,44 @@ import { enableFocusRefresh } from './focus-refresh.js';
 import { initializeCloud } from './cloud.js';
 import { initializeReview } from './review.js';
 
-const loadingPanel = document.querySelector('.loading-panel');
+const loadingPanel = document.querySelector('body > .loading-panel');
 const statusMessage = document.querySelector('#navigation-status');
 let activeRequest;
 let preload;
 let skeletonTimer;
 let neighborTimer;
+let workspaceRequest;
+
+async function scanWorkspace() {
+    let results = document.querySelector('[data-scan-url]');
+    if (!results) return;
+    const controller = new AbortController();
+    workspaceRequest = controller;
+    try {
+        while (results.dataset.scanUrl && results.isConnected) {
+            const { page } = await loadPage(results.dataset.scanUrl, controller.signal);
+            const next = page.querySelector('[data-workspace-results]');
+            if (controller.signal.aborted || !results.isConnected) return;
+            if (!next) throw new Error('Workspace unavailable');
+            if (next.dataset.scanUrl && next.dataset.repositoryCount === results.dataset.repositoryCount) continue;
+            const closed = new Set([...results.querySelectorAll('details:not([open])')].map(item => item.dataset.folder));
+            for (const item of next.querySelectorAll('details')) item.open = !closed.has(item.dataset.folder);
+            const focused = results.contains(document.activeElement) ? document.activeElement : null;
+            results.replaceWith(next);
+            results = next;
+            if (focused?.href) [...results.querySelectorAll('a')].find(link => link.href === focused.href)?.focus({ preventScroll: true });
+            if (focused?.tagName === 'SUMMARY') [...results.querySelectorAll('details')].find(item => item.dataset.folder === focused.parentElement.dataset.folder)?.querySelector('summary')?.focus({ preventScroll: true });
+        }
+    } catch {
+        if (controller.signal.aborted || !results.isConnected) return;
+        const message = results.querySelector('.scan-status');
+        message.textContent = 'Workspace scan interrupted. ';
+        const retry = document.createElement('a');
+        retry.href = '/';
+        retry.textContent = 'Scan again';
+        message.append(retry);
+    }
+}
 
 function resetNavigation() {
     clearTimeout(skeletonTimer);
@@ -93,6 +125,7 @@ document.addEventListener('click', event => {
 });
 
 async function navigate(next, filterField = null) {
+    workspaceRequest?.abort();
     cancelRefresh();
     clearTimeout(filterTimer);
     activeRequest?.abort();
@@ -123,8 +156,10 @@ async function navigate(next, filterField = null) {
         }
         document.querySelector('header').replaceWith(loaded.page.querySelector('header'));
         document.querySelector('main').replaceWith(main);
+        document.documentElement.dataset.theme = loaded.page.documentElement.dataset.theme;
         document.body.className = loaded.page.body.className;
         document.title = loaded.page.title;
+        scanWorkspace();
         initializeCloud();
         initializePageReview();
         const files = main.querySelector('.review-files');
@@ -184,14 +219,17 @@ function cancelNavigation() {
     resetNavigation();
 }
 
-window.addEventListener('pagehide', cancelNavigation);
+window.addEventListener('pagehide', () => { workspaceRequest?.abort(); cancelNavigation(); });
 window.addEventListener('popstate', () => {
     cancelNavigation();
     location.reload();
 });
 document.addEventListener('submit', event => { if (!event.defaultPrevented) cancelNavigation(); });
 window.addEventListener('keydown', event => {
-    if (event.key === 'Escape') cancelNavigation();
+    if (event.key === 'Escape' && activeRequest) {
+        cancelNavigation();
+        scanWorkspace();
+    }
     if (event.defaultPrevented || event.repeat || event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey ||
         event.target.isContentEditable || event.target.closest('input, textarea, select')) return;
     const shortcuts = {
@@ -209,6 +247,8 @@ window.addEventListener('keydown', event => {
 initializePageReview();
 initializeCloud();
 
+scanWorkspace();
+
 const cancelRefresh = enableFocusRefresh(initializePageReview, () => Boolean(activeRequest));
 window.addEventListener('blur', discardPreload);
 window.Native?.on('Native\\Desktop\\Events\\Windows\\WindowBlurred', discardPreload);
@@ -217,5 +257,11 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) disca
 document.addEventListener('submit', event => {
     if (event.target.matches('[data-index-form]')) {
         event.target.elements.filter.value = document.querySelector('.file-filter input')?.value ?? '';
+    }
+});
+
+document.addEventListener('change', event => {
+    if (event.target.matches('.settings-form input[name="theme"]')) {
+        document.documentElement.dataset.theme = event.target.value;
     }
 });

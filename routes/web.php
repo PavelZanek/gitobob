@@ -3,10 +3,13 @@
 use App\Http\Controllers\CloudController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\RepositoryController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [WorkspaceController::class, 'index'])->name('workspace');
+Route::view('/settings', 'settings')->name('settings');
+Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 Route::post('/workspace', [WorkspaceController::class, 'choose'])->name('workspace.choose');
 
 Route::get('/repository', RepositoryController::class)->name('repository');

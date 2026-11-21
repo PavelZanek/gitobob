@@ -17,12 +17,17 @@ final class WorkspaceController
         $path = is_string($path) ? $path : null;
         $available = $path !== null && is_dir($path) && is_readable($path);
 
-        $tree = $available ? $scanner->workspaceTree($path, $request->boolean('snapshot')) : null;
+        $token = $request->query('batch');
+        abort_unless($token === null || is_string($token), 400);
+        $scan = $available ? $scanner->browse($path, $request->boolean('snapshot'), $request->boolean('opening') && $token === null, $token) : null;
+        $tree = $scan['tree'] ?? null;
         $onlyChanged = $request->boolean('changed');
 
         return view('workspace', [
             'path' => $path,
             'available' => $available,
+            'token' => $scan['token'] ?? null,
+            'count' => $scan['count'] ?? 0,
             'hasRepositories' => $tree !== null,
             'onlyChanged' => $onlyChanged,
             'tree' => $onlyChanged ? $tree?->onlyChanged() : $tree,
@@ -34,8 +39,10 @@ final class WorkspaceController
         $path = Dialog::new()->folders()->title('Choose a workspace folder')->button('Choose folder')->open();
         if (is_string($path) && is_dir($path)) {
             Storage::disk('local')->put('workspace.path', $path);
+
+            return to_route('workspace', ['opening' => 1]);
         }
 
-        return to_route('workspace');
+        return to_route('workspace', ['snapshot' => 1]);
     }
 }

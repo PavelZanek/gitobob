@@ -2,8 +2,10 @@
 
 namespace App\Git;
 
+use App\Preferences;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Discover working trees independently of the parent repository's ignore rules.
@@ -36,7 +38,8 @@ final class RepositoryScanner
 
     public function workspaceTree(string $root, bool $reuse): ?RepositoryFolder
     {
-        $key = 'workspace-tree-v1:'.hash('sha256', $root);
+        $depth = Preferences::read()->depth;
+        $key = 'workspace-tree-v2:'.$this->key($root, $depth);
         if ($reuse) {
             $snapshot = Cache::get($key);
             if (is_array($snapshot)) {
@@ -44,44 +47,120 @@ final class RepositoryScanner
             }
         }
 
-        $tree = $this->scan($root);
+        $tree = $this->scan($root, $depth);
         Cache::put($key, ['tree' => $tree], now()->addMinutes(5));
 
         return $tree;
+    }
+
+    /**
+     * @return array{tree:?RepositoryFolder, token:?string, count:int}
+     */
+    public function browse(string $root, bool $reuse, bool $opening, ?string $token): array
+    {
+        $depth = Preferences::read()->depth;
+        $key = $this->key($root, $depth);
+
+        return Cache::lock('workspace-scan-lock:'.$key, 120)->block(60, function () use ($root, $reuse, $opening, $token, $key, $depth): array {
+            $active = 'workspace-scan:'.$key;
+            $snapshot = 'workspace-tree-v2:'.$key;
+            $scan = Cache::get($active);
+            if ($token !== null) {
+                if (! is_array($scan) && ($cached = Cache::get($snapshot)) && ($cached['token'] ?? null) === $token) {
+                    return ['tree' => $cached['tree'], 'token' => null, 'count' => 0];
+                }
+                abort_unless(is_array($scan) && $scan['token'] === $token, 409);
+            } elseif ($reuse || $opening) {
+                if (! is_array($scan) && is_array($cached = Cache::get($snapshot))) {
+                    return ['tree' => $cached['tree'], 'token' => null, 'count' => 0];
+                }
+            } else {
+                $scan = null;
+            }
+            if (! is_array($scan)) {
+                $scan = ['token' => (string) Str::uuid(), 'pending' => ['.'], 'repositories' => []];
+            }
+
+            if (! $opening) {
+                $this->walk($root, $scan['pending'], $scan['repositories'], $depth, hrtime(true) + 250_000_000);
+            }
+            $tree = RepositoryFolder::fromRepositories(basename($root) ?: '/', $scan['repositories']);
+            $complete = $scan['pending'] === [];
+            if ($complete) {
+                Cache::put($snapshot, ['tree' => $tree, 'token' => $scan['token']], now()->addMinutes(5));
+                Cache::forget($active);
+            } else {
+                Cache::put($active, $scan, now()->addMinutes(10));
+            }
+
+            return ['tree' => $tree, 'token' => $complete ? null : $scan['token'], 'count' => count($scan['repositories'])];
+        });
     }
 
     public function forgetWorkspace(): void
     {
         $root = Storage::disk('local')->get('workspace.path');
         if (is_string($root)) {
-            Cache::forget('workspace-tree-v1:'.hash('sha256', $root));
+            $key = $this->key($root, Preferences::read()->depth);
+            Cache::forget('workspace-tree-v2:'.$key);
+            Cache::forget('workspace-scan:'.$key);
         }
     }
 
-    public function scan(string $directory): ?RepositoryFolder
+    private function key(string $root, ?int $depth): string
     {
-        $entries = @scandir($directory);
-        if ($entries === false) {
-            return null;
+        return hash('sha256', $root."\0".($depth ?? 'all'));
+    }
+
+    public function scan(string $directory, ?int $depth = Preferences::DEFAULT_DEPTH): ?RepositoryFolder
+    {
+        $pending = ['.'];
+        $repositories = [];
+        $this->walk($directory, $pending, $repositories, $depth);
+
+        return RepositoryFolder::fromRepositories(basename($directory) ?: '/', $repositories);
+    }
+
+    /**
+     * @param  list<string>  $pending
+     * @param  array<string,RepositoryStatus>  $repositories
+     */
+    private function walk(string $root, array &$pending, array &$repositories, ?int $depth, ?int $deadline = null): void
+    {
+        $root = realpath($root);
+        if ($root === false) {
+            $pending = [];
+
+            return;
         }
-
-        $status = in_array('.git', $entries, true) ? RepositoryStatus::read($directory) : null;
-
-        $children = [];
-        foreach ($entries as $name) {
-            $path = $directory.DIRECTORY_SEPARATOR.$name;
-            if (in_array($name, self::EXCLUDED, true) || is_link($path) || ! is_dir($path)) {
+        $offset = 0;
+        while (isset($pending[$offset])) {
+            $relative = $pending[$offset++];
+            $directory = $relative === '.' ? $root : rtrim($root, '/').'/'.$relative;
+            if (realpath($directory) !== $directory) {
                 continue;
             }
-
-            $child = $this->scan($path);
-            if ($child !== null) {
-                $children[] = $child;
+            if (file_exists($directory.'/.git') && ($status = RepositoryStatus::read($directory)) !== null) {
+                $repositories[$relative] = $status;
+            }
+            $level = $relative === '.' ? 0 : substr_count($relative, '/') + 1;
+            if ($depth === null || $level < $depth) {
+                $lastLevel = $depth === $level + 1;
+                foreach (@scandir($directory, SCANDIR_SORT_NONE) ?: [] as $name) {
+                    $path = $directory.'/'.$name;
+                    if (in_array($name, self::EXCLUDED, true) || ($lastLevel && ! file_exists($path.'/.git'))) {
+                        continue;
+                    }
+                    if (is_dir($path) && ! is_link($path)) {
+                        $pending[] = $relative === '.' ? $name : $relative.'/'.$name;
+                    }
+                }
+            }
+            if ($deadline !== null && hrtime(true) >= $deadline) {
+                break;
             }
         }
 
-        return $status !== null || $children !== []
-            ? new RepositoryFolder(basename($directory) ?: '/', $status, $children)
-            : null;
+        $pending = array_slice($pending, $offset);
     }
 }

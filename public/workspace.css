@@ -170,3 +170,18 @@ header .app-modes { margin-left: auto; }
 .write-form button { justify-self: start; }
 .comment-box { margin-bottom: 12px; }
 .comment-box > summary { padding: 10px 16px; font-weight: 600; }
+
+.scan-status { margin: 14px 0 8px; color: var(--ink); font-weight: 600; }
+.scan-status span { margin-left: 8px; color: var(--muted); font-weight: 400; }
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+header .settings-link { margin-left: auto; }
+header .app-modes + .settings-link { margin-left: 0; }
+.settings-panel { max-width: 640px; }
+.settings-form { padding: 20px; display: grid; justify-items: start; gap: 20px; }
+.settings-form fieldset { border: 0; padding: 0; margin: 0; }
+.settings-form legend, .settings-depth > label { display: block; font-weight: 600; margin-bottom: 8px; }
+.theme-choices { display: flex; gap: 15px; align-items: center; }
+.settings-depth input { width: 7em; border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; background: var(--surface); color: var(--ink); }
+.settings-depth p { margin-top: 6px; color: var(--muted); font-size: 13px; }

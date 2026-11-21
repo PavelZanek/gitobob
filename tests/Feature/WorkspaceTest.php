@@ -28,8 +28,15 @@ it('remembers the chosen folder and shows nested and linked working trees', func
 
     Http::fake(['desktop.test/dialog/open' => Http::response(['result' => [$projects]])]);
 
-    $this->post('/workspace')->assertRedirect('/');
-    $this->get('/')->assertOk()->assertSeeInOrder(['projects', 'linked', 'personal', 'Dvě slova'])
+    $this->post('/workspace')->assertRedirect('/?opening=1');
+    $opening = $this->get('/?opening=1')->assertOk()->assertSee('Finding repositories…')->assertDontSee('No repositories found');
+    $token = $opening->viewData('token');
+    expect($token)->toBeString();
+    do {
+        $page = $this->get('/?batch='.$token)->assertOk();
+    } while ($page->viewData('token') !== null);
+    $this->get('/?batch='.$opening->viewData('token'))->assertOk()->assertSee('Detached HEAD');
+    $page->assertSeeInOrder(['projects', 'linked', 'personal', 'Dvě slova'])
         ->assertSee('Detached HEAD')->assertDontSee('unrelated')->assertDontSee('cycle');
     expect(Storage::disk('local')->get('workspace.path'))->toBe($projects);
 });
@@ -38,7 +45,7 @@ it('keeps the previous folder when the picker is dismissed', function (): void {
     Storage::disk('local')->put('workspace.path', '/previous');
     Http::fake(['desktop.test/dialog/open' => Http::response(['result' => null])]);
 
-    $this->post('/workspace')->assertRedirect('/');
+    $this->post('/workspace')->assertRedirect('/?snapshot=1');
     expect(Storage::disk('local')->get('workspace.path'))->toBe('/previous');
     $this->get('/')->assertOk()->assertSee('Folder unavailable');
 });
@@ -84,4 +91,60 @@ it('shows branch and file counts and keeps only the paths to changed repositorie
         ->assertSeeInOrder(['workspace</span>', 'group</span>', 'editor</span>', 'feature/editor', '3 changed files'], false)
         ->assertDontSee('workspace-branch')->assertDontSee('clean-sibling')->assertDontSee('0 changed files');
     $this->get('/')->assertSee('clean-sibling')->assertSee('3 changed files');
+});
+
+it('reuses a completed scan when reopening and isolates in-flight scans by workspace', function (): void {
+    $first = Storage::disk('local')->path('first');
+    $other = Storage::disk('local')->path('second');
+    Process::run(['git', 'init', $first.'/plugins/one'])->throw();
+    Process::run(['git', 'init', $other.'/two'])->throw();
+    Storage::disk('local')->put('workspace.path', $first);
+    $token = $this->get('/?opening=1')->viewData('token');
+    $this->get('/?opening=1')->assertViewHas('token', $token);
+    Storage::disk('local')->put('workspace.path', $other);
+    $this->get('/?batch='.$token)->assertConflict();
+    $this->get('/')->assertSee('two');
+    $this->get('/?opening=1')->assertSee('two')->assertDontSee('Finding repositories…');
+    Storage::disk('local')->put('workspace.path', $first);
+    $this->get('/?batch='.$token)->assertSee('one')->assertDontSee('two');
+});
+
+it('discovers deeply nested repositories in a wide workspace and skips dependencies and directory links', function (): void {
+    $root = Storage::disk('local')->path('wide');
+    foreach (range(1, 20) as $index) {
+        File::ensureDirectoryExists($root.'/projects/plugins/group-'.$index);
+    }
+    $group = $root.'/projects/plugins/group-2';
+    Process::run(['git', 'init', '-b', 'deep-review', $group.'/nested space/app'])->throw();
+    Process::run(['git', 'init', '-b', 'dependency-only', $group.'/vendor/dependency'])->throw();
+    symlink($root, $group.'/cycle');
+    Storage::disk('local')->put('workspace.path', $root);
+    $page = $this->get('/?opening=1')->assertOk();
+    while ($token = $page->viewData('token')) {
+        $page = $this->get('/?batch='.$token)->assertOk();
+    }
+    $page->assertSee('deep-review')->assertDontSee('dependency-only')->assertDontSee('cycle');
+});
+
+it('applies the saved search depth to the workspace tree and all changes', function (): void {
+    $root = Storage::disk('local')->path('bounded');
+    $nested = $root.'/one/two/three/four/five';
+    Process::run(['git', 'init', '-b', 'root-branch', $root])->throw();
+    Process::run(['git', 'init', '-b', 'fifth-level', $nested])->throw();
+    Process::run(['git', 'init', '-b', 'sixth-level', $nested.'/six'])->throw();
+    file_put_contents($nested.'/six/note.md', 'Deep change');
+    Storage::disk('local')->put('workspace.path', $root);
+
+    $this->get('/settings')->assertSee('value="5"', false)->assertSee('data-theme="system"', false);
+    $this->get('/changes')->assertDontSee('Deep change');
+    $this->get('/?snapshot=1')->assertSee('fifth-level')->assertDontSee('sixth-level');
+    $this->post('/settings', ['theme' => 'dark', 'depth' => 0])->assertRedirect('/settings');
+    $this->get('/?snapshot=1')->assertSee('data-theme="dark"', false)->assertSee('root-branch')->assertDontSee('fifth-level');
+    $this->post('/settings', ['theme' => 'light', 'depth' => ''])->assertRedirect('/settings');
+    $this->get('/changes?snapshot=1')->assertSee('Deep change')->assertSee('data-theme="light"', false);
+    $this->get('/?snapshot=1')->assertSee('sixth-level');
+    $this->post('/settings', ['theme' => 'unknown', 'depth' => -1])->assertSessionHasErrors(['theme', 'depth']);
+    $this->get('/settings')->assertSee('data-theme="light"', false);
+    $this->post('/settings', ['theme' => 'system', 'depth' => 5])->assertRedirect('/settings');
+    $this->get('/settings')->assertSee('data-theme="system"', false);
 });

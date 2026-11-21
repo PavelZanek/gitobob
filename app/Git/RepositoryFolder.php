@@ -11,6 +11,31 @@ final readonly class RepositoryFolder
         public array $children,
     ) {}
 
+    /** @param array<string,RepositoryStatus> $repositories */
+    public static function fromRepositories(string $name, array $repositories): ?self
+    {
+        if ($repositories === []) {
+            return null;
+        }
+        $status = $repositories['.'] ?? null;
+        unset($repositories['.']);
+        $groups = [];
+        foreach ($repositories as $relative => $repository) {
+            [$child, $rest] = array_pad(explode('/', (string) $relative, 2), 2, '.');
+            $groups[$child][$rest] = $repository;
+        }
+        ksort($groups, SORT_STRING);
+        $children = [];
+        foreach ($groups as $child => $descendants) {
+            $folder = self::fromRepositories((string) $child, $descendants);
+            if ($folder !== null) {
+                $children[] = $folder;
+            }
+        }
+
+        return new self($name, $status, $children);
+    }
+
     /** @return array<string, RepositoryStatus> */
     public function changedRepositories(string $relative = '.'): array
     {

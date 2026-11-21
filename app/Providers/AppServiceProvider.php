@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Preferences;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\View\View as Page;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        View::composer(['workspace', 'repository', 'commit', 'push', 'cloud', 'cloud-pull', 'settings'],
+            static fn (Page $page): Page => $page->with('preferences', Preferences::read()));
     }
 }

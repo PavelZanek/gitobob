@@ -1,6 +1,6 @@
 <li>
     @if ($folder->children)
-        <details open>
+        <details open data-folder="{{ $relative }}">
             <summary>@include('folder-label')</summary>
             <ul>@foreach ($folder->children as $child) @include('folder', ['folder' => $child, 'relative' => $relative === '.' ? $child->name : $relative.'/'.$child->name]) @endforeach</ul>
         </details>
