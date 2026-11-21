@@ -48,3 +48,10 @@ Route::post('/cloud/pulls/{number}/open', [CloudController::class, 'openPull'])-
 Route::post('/cloud/pulls/{number}/viewed', [CloudController::class, 'viewed'])->where('number', '[1-9][0-9]{0,9}')->name('cloud.pull.viewed');
 
 Route::post('/cloud/pulls/{number}/comments', [CloudController::class, 'comment'])->where('number', '[1-9][0-9]{0,9}')->name('cloud.pull.comment');
+
+Route::prefix('/cloud/pulls/{number}')->where(['number' => '[1-9][0-9]{0,9}'])->name('cloud.pull.')->group(function (): void {
+    Route::get('/summary', [CloudController::class, 'summary'])->name('summary');
+    Route::post('/ready', [CloudController::class, 'ready'])->name('ready');
+    Route::get('/lines', [CloudController::class, 'lines'])->name('lines');
+    Route::post('/lines', [CloudController::class, 'postLine'])->name('lines.post');
+});

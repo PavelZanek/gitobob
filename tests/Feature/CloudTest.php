@@ -271,3 +271,57 @@ it('posts an explicit PR comment once and retains the draft on an unconfirmed re
     $fail = true;
     $this->post($url, ['submission' => (string) Str::uuid()] + $body)->assertSessionHasInput('comment', $body['comment']);
 });
+
+it('confirms the reviewed revision before publishing inline feedback or marking a draft ready', function (): void {
+    $writes = [];
+    Process::fake(function (PendingProcess $process) use (&$writes) {
+        if ($process->command[1] === 'config') {
+            return Process::result('reviewer');
+        }
+        if (in_array('GET', $process->command, true)) {
+            return Process::result(json_encode([['node_id' => 'PR_demo', 'head_sha' => 'tip', 'base_sha' => 'base', 'state' => 'open', 'draft' => true, 'changed_files' => 3]]));
+        }
+        $payload = json_decode($process->input, true, flags: JSON_THROW_ON_ERROR);
+        $writes[] = $payload;
+
+        return Process::result(json_encode(['data' => ['markPullRequestReadyForReview' => ['pullRequest' => ['isDraft' => false]]]]));
+    });
+    $scope = hash('sha256', (new GitHubClient)->reviewKey('example/demo', 4));
+    $revision = ['scope' => $scope, 'head' => 'tip', 'base' => 'base'];
+    $ready = '/cloud/pulls/4/ready?repository=example/demo';
+    $line = '/cloud/pulls/4/lines?repository=example/demo';
+    $draft = ['submission' => (string) Str::uuid(), 'body' => 'Check the deleted line', 'path' => 'source.md', 'line' => 2, 'side' => 'LEFT'];
+    $this->post($ready, ['scope' => 'other'] + $revision)->assertSessionHas('notice', 'The GitHub account changed. Review the pull request again.');
+    $this->post($line, ['head' => 'previous'] + $revision + $draft)->assertSessionHasInput('body', $draft['body']);
+    expect($writes)->toBeEmpty();
+    $this->post($line, $revision + $draft)->assertSessionHas('notice', 'Line comment posted to GitHub.');
+    $this->post($line, $revision + $draft)->assertRedirect();
+    $this->post($ready, $revision)->assertSessionHas('notice', 'Pull request is ready for review.');
+    expect($writes)->toHaveCount(2)
+        ->and($writes[0])->toBe(['commit_id' => 'tip', 'path' => 'source.md', 'line' => 2, 'side' => 'LEFT', 'body' => 'Check the deleted line'])
+        ->and($writes[1]['variables'])->toBe(['id' => 'PR_demo']);
+});
+
+it('reports failed checks, requested changes and line replies only against the displayed diff', function (): void {
+    $comments = [['id' => 7, 'line' => 2, 'side' => 'RIGHT', 'body' => 'Question'], ['id' => 8, 'parent' => 7, 'body' => 'Reply']];
+    Process::fake(function (PendingProcess $process) use ($comments) {
+        $endpoint = end($process->command);
+        if ($endpoint === 'graphql') {
+            return Process::result(json_encode(['data' => ['repository' => ['pullRequest' => [
+                'headRefOid' => 'tip', 'reviewDecision' => 'CHANGES_REQUESTED',
+                'latestReviews' => ['nodes' => [['author' => ['login' => 'reviewer'], 'state' => 'CHANGES_REQUESTED']]],
+                'commits' => ['nodes' => [['commit' => ['statusCheckRollup' => ['state' => 'FAILURE', 'contexts' => [
+                    'totalCount' => 2, 'nodes' => [['name' => 'Unit tests', 'conclusion' => 'FAILURE'], ['context' => 'Build', 'state' => 'PENDING']],
+                ]]]]]],
+            ]]]]));
+        }
+
+        return Process::result(json_encode(str_contains($endpoint, '/comments?') ? $comments : [['head_sha' => 'tip', 'base_sha' => 'base']]));
+    });
+    $url = '/cloud/pulls/4/summary?repository=example/demo';
+    $this->get($url.'&head=tip')->assertOk()->assertSee('Checks failed')->assertSee('Changes requested')->assertSee('Unit tests')->assertSee('reviewer')->assertSee('Pending');
+    $this->get($url.'&head=previous')->assertStatus(503)->assertSee('New commits');
+    $lines = '/cloud/pulls/4/lines?repository=example/demo&path=notes.txt&base=base';
+    $this->getJson($lines.'&head=tip')->assertExactJson($comments);
+    $this->getJson($lines.'&head=previous')->assertConflict();
+});

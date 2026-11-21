@@ -23,6 +23,13 @@
                 <p class="repository-meta">#{{ $number }} @if ($detail) · {{ ($detail['pull']['draft'] ?? false) ? 'Draft' : 'Ready for review' }} · {{ $detail['pull']['head'] }} → {{ $detail['pull']['base'] }} @endif</p>
             </div>
             <div class="actions">
+                @if (($detail['pull']['draft'] ?? false) && ($detail['pull']['state'] ?? '') === 'open')
+                    <form method="post" data-review-write action="{{ route('cloud.pull.ready', $query + ['page' => $page, 'file' => $selected['id'] ?? null]) }}">
+                        @csrf
+                        @include('pull-revision')
+                        <button>Mark ready for review</button>
+                    </form>
+                @endif
                 <form method="post" action="{{ route('cloud.pull.open', $base) }}">@csrf<button>Open on GitHub</button></form>
                 <a class="button-link" href="{{ route('cloud.pull', $query + ['page' => $page, 'file' => $file]) }}">Refresh</a>
             </div>
@@ -31,6 +38,10 @@
         @isset($error)
             <p class="empty" role="alert">{{ $error }}</p>
         @else
+            <details class="review-summary" data-review-summary="{{ route('cloud.pull.summary', $base + ['head' => $detail['pull']['head_sha'] ?? '']) }}">
+                <summary><strong>Checks &amp; reviews</strong> <span data-summary-label role="status">Loading…</span></summary>
+                <div data-summary-details></div>
+            </details>
             <details class="panel comment-box" data-comment-draft="{{ hash('sha256', $scope) }}" @if(session('posted') === hash('sha256', $scope)) data-posted @endif @if(old('comment') || $errors->has('comment')) open @endif>
                 <summary>Comment on pull request</summary>
                 <form class="write-form" method="post" action="{{ route('cloud.pull.comment', $query + ['file' => $selected['id'] ?? null, 'page' => $page]) }}">
@@ -111,7 +122,24 @@
                                     </form>
                                 </div>
                                 @if ($selected['patch'] !== '')
-                                    @include('patch', ['patch' => $selected['patch'], 'section' => 'Pull request'])
+                                    <div data-line-review data-comments-url="{{ route('cloud.pull.lines', $base + ['path' => $selected['filename'], 'head' => $detail['pull']['head_sha'] ?? '', 'base' => $detail['pull']['base_sha'] ?? '']) }}">
+                                        <p class="line-status" data-line-status role="status"></p>
+                                        @include('patch', ['patch' => $selected['patch'], 'section' => 'Pull request', 'inlineReview' => true])
+                                        <template data-line-template>
+                                            <form class="write-form inline-compose" data-review-write method="post" action="{{ route('cloud.pull.lines.post', $query) }}">
+                                                @csrf
+                                                @include('pull-revision')
+                                                <input type="hidden" name="submission" value="{{ Str::uuid() }}">
+                                                <input type="hidden" name="path" value="{{ $selected['filename'] }}">
+                                                <input type="hidden" name="line"><input type="hidden" name="side">
+                                                <label><strong data-line-label></strong><textarea name="body" required maxlength="65536" rows="3"></textarea></label>
+                                                <div class="actions"><button>Post line comment</button><button type="button" data-cancel-line>Cancel</button></div>
+                                            </form>
+                                        </template>
+                                        @if (old('body') && old('scope') === hash('sha256', $scope) && old('path') === $selected['filename'])
+                                            <details open class="line-recovery"><summary>Unsent comment · {{ old('side') }} {{ old('line') }}</summary><p>{{ old('body') }}</p></details>
+                                        @endif
+                                    </div>
                                     @if ($selected['limited'])<p class="clean-workspace">Only the beginning of this diff is shown.</p>@endif
                                 @else
                                     <p class="clean-workspace">GitHub did not provide a text diff for this file.</p>

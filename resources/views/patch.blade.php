@@ -35,7 +35,7 @@
                     $after = $new++;
                 }
             @endphp
-            <div class="patch-row {{ $kind }}"><span class="line-number" aria-hidden="true">{{ $before }}</span><span class="line-number" aria-hidden="true">{{ $after }}</span><code>{{ $line }}@if ($kind === 'hunk' && ($hunkAction ?? false))<button class="hunk-action" form="index-{{ $section }}" name="hunk" value="{{ $hunkIndex }}">{{ $section === 'Staged' ? 'Unstage change' : 'Stage change' }}</button>@endif</code></div>
+            <div class="patch-row {{ $kind }}" @if ($inlineReview ?? false) data-old="{{ $before }}" data-new="{{ $after }}" @endif>@if ($inlineReview ?? false)<span class="line-gutter">@if ($after !== '' || $before !== '')<button type="button" data-line="{{ $after !== '' ? $after : $before }}" data-side="{{ $after !== '' ? 'RIGHT' : 'LEFT' }}" aria-label="Comment on {{ $after !== '' ? 'new' : 'old' }} line {{ $after !== '' ? $after : $before }}" title="Add line comment">+</button>@endif</span>@endif<span class="line-number" aria-hidden="true">{{ $before }}</span><span class="line-number" aria-hidden="true">{{ $after }}</span><code>{{ $line }}@if ($kind === 'hunk' && ($hunkAction ?? false))<button class="hunk-action" form="index-{{ $section }}" name="hunk" value="{{ $hunkIndex }}">{{ $section === 'Staged' ? 'Unstage change' : 'Stage change' }}</button>@endif</code></div>
         @endforeach
     </div>
 </div>

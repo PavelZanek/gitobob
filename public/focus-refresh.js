@@ -54,7 +54,7 @@ export function enableFocusRefresh(initialize, navigating) {
             if (response.status === 204 || !response.ok) return;
             const page = new DOMParser().parseFromString(await response.text(), 'text/html');
             const next = page.querySelector('main.repository-review');
-            if (!next || !main.isConnected || controller.signal.aborted || navigating()) return;
+            if (main.querySelector('.inline-compose') || !next || !main.isConnected || controller.signal.aborted || navigating()) return;
 
             const restoreDiff = restoreDiffPosition(main, next);
             const listTop = main.querySelector('.review-files')?.scrollTop ?? 0;

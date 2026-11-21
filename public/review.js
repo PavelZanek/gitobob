@@ -1,3 +1,5 @@
+import { initializePullReview } from './pull-review.js';
+
 function initializeHunks() {
     const nav = document.querySelector('[data-hunk-navigation]');
     if (!nav) return;
@@ -75,6 +77,7 @@ function updateFileNavigation(controls, files, filter) {
 
 export function initializeReview(onFileNavigation) {
     initializeHunks();
+    initializePullReview();
     const draft = document.querySelector('[data-comment-draft]');
     if (draft) {
         const key = 'pr-draft:' + draft.dataset.commentDraft;

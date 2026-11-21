@@ -6,6 +6,7 @@ use App\Git\GitHubClient;
 use App\Git\PullRequestReview;
 use App\Git\RepositoryScanner;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -218,6 +219,102 @@ final class CloudController
         }
 
         return $back->with('posted', $scope)->with('notice', 'Comment posted to GitHub.');
+    }
+
+    public function summary(Request $request, GitHubClient $github, int $number): Response
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        try {
+            $summary = $github->reviewSummary($repository, $number);
+            if ($summary['headRefOid'] !== $request->query('head')) {
+                throw new RuntimeException('New commits are available. Refresh the diff to see their checks.');
+            }
+
+            return response()->view('pull-summary', compact('summary'))->header('Cache-Control', 'no-store');
+        } catch (RuntimeException $exception) {
+            return response($exception->getMessage(), 503, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
+        }
+    }
+
+    public function lines(Request $request, GitHubClient $github, int $number): JsonResponse
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $data = $request->validate(['path' => ['required', 'string', 'max:4096']]);
+        try {
+            $rows = $github->lineComments($repository, $number, $data['path']);
+            $pull = $github->pullMetadata($repository, $number);
+            abort_unless($pull['head_sha'] === $request->query('head') && $pull['base_sha'] === $request->query('base'), 409);
+
+            return response()->json($rows)->header('Cache-Control', 'no-store');
+        } catch (RuntimeException $exception) {
+            if ($exception instanceof HttpExceptionInterface) {
+                throw $exception;
+            }
+
+            return response()->json(['error' => $exception->getMessage()], 503);
+        }
+    }
+
+    public function ready(Request $request, GitHubClient $github, int $number): RedirectResponse
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $back = to_route('cloud.pull', ['repository' => $repository, 'number' => $number] + $request->only('file', 'page', 'filter', 'hide'));
+        try {
+            $pull = $this->currentPull($request, $github, $repository, $number);
+            if ($pull['draft']) {
+                $github->markReady($pull['node_id']);
+            }
+            $scope = $github->reviewKey($repository, $number);
+            $pageCount = (int) ceil(min($pull['changed_files'], GitHubClient::MAX_PR_FILES) / GitHubClient::FILES_PER_PAGE);
+            for ($page = 1; $page <= $pageCount; $page++) {
+                Cache::forget($scope.':files:'.$page);
+            }
+
+            return $back->with('notice', 'Pull request is ready for review.');
+        } catch (RuntimeException $exception) {
+            return $back->with('notice', $exception->getMessage());
+        }
+    }
+
+    public function postLine(Request $request, GitHubClient $github, int $number): RedirectResponse
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $data = $request->validate([
+            'path' => ['required', 'string', 'max:4096'], 'line' => ['required', 'integer', 'min:1'],
+            'side' => ['required', 'in:LEFT,RIGHT'], 'body' => ['required', 'string', 'max:65536'], 'submission' => ['required', 'uuid'],
+        ]);
+        $back = to_route('cloud.pull', ['repository' => $repository, 'number' => $number, 'file' => hash('sha256', $data['path']), 'locate' => 1]
+            + $request->only('filter', 'hide'))->withFragment('diff');
+        try {
+            $pull = $this->currentPull($request, $github, $repository, $number);
+            if (! Cache::add('pr-line:'.$request->input('scope').':'.$data['submission'], true, now()->addDay())) {
+                throw new RuntimeException('This submission was already received. Check the comments before trying again.');
+            }
+            $github->postLineComment($repository, $number, $pull['head_sha'], $data['path'], $data['line'], $data['side'], $data['body']);
+        } catch (RuntimeException $exception) {
+            return $back->with('notice', $exception->getMessage())->withInput($request->only('line', 'side', 'body', 'head', 'path', 'scope', 'base'));
+        }
+
+        return $back->with('notice', 'Line comment posted to GitHub.');
+    }
+
+    /** @return array<string, mixed> */
+    private function currentPull(Request $request, GitHubClient $github, string $repository, int $number): array
+    {
+        $scope = hash('sha256', $github->reviewKey($repository, $number));
+        if ($scope !== $request->input('scope')) {
+            throw new RuntimeException('The GitHub account changed. Review the pull request again.');
+        }
+        $pull = $github->pullMetadata($repository, $number);
+        if ($pull['state'] !== 'open' || $pull['head_sha'] !== $request->input('head') || $pull['base_sha'] !== $request->input('base')) {
+            throw new RuntimeException('The pull request changed. Review the latest diff before continuing.');
+        }
+
+        return $pull;
     }
 
     public function openPull(Request $request, int $number): Response

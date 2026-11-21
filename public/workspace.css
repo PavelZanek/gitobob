@@ -232,3 +232,18 @@ header .app-modes + .settings-link { margin-left: 0; }
 @media (prefers-reduced-motion: reduce) {
     .compose-pending::before { animation: none; }
 }
+
+.review-summary { margin: 12px 0; font-size: 13px; }
+.review-summary summary { cursor: pointer; }
+.review-summary summary span { color: var(--muted); margin-left: 6px; }
+.review-breakdown { display: flex; flex-wrap: wrap; gap: 32px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-top: 6px; }
+.review-breakdown h3, .review-breakdown p { margin: 2px 0; font-size: 13px; }
+[data-line-review] .patch-row { grid-template-columns: 24px 5ch 5ch 1fr; }
+.line-gutter { text-align: center; }
+.line-gutter button { vertical-align: top; padding: 0; width: 18px; height: 18px; line-height: 15px; border-color: transparent; background: transparent; color: var(--accent); }
+.patch-row:hover .line-gutter button, .line-gutter button:focus-visible { background: var(--tag); border-color: var(--accent); }
+.inline-compose, .line-thread, .line-recovery { border-left: 3px solid var(--accent); background: var(--panel); color: var(--ink); margin: 4px 12px 8px 24px; padding: 10px; font: 13px/1.5 system-ui,sans-serif; white-space: normal; max-width: min(480px,65vw); }
+.inline-compose label, .inline-compose textarea { display: block; width: 100%; }
+.line-thread p, .line-recovery p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 4px; }
+.line-status { font-size: 12px; color: var(--muted); padding: 4px 12px; }
+.line-status:empty { display: none; }

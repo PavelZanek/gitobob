@@ -120,7 +120,7 @@ final class GitHubClient
     public function pullMetadata(string $repository, int $number): array
     {
         $endpoint = 'repos/'.$repository.'/pulls/'.$number;
-        [$pull] = $this->read($endpoint, '[{title, draft, head:.head.label, base:.base.ref, base_sha:.base.sha, head_sha:.head.sha, changed_files}]', false);
+        [$pull] = $this->read($endpoint, '[{title, draft, state, node_id, head:.head.label, base:.base.ref, base_sha:.base.sha, head_sha:.head.sha, changed_files}]', false);
 
         return $pull;
     }
@@ -166,6 +166,76 @@ final class GitHubClient
         }
 
         return $number;
+    }
+
+    /** @return array<string, mixed> */
+    public function reviewSummary(string $repository, int $number): array
+    {
+        [$owner, $name] = explode('/', $repository, 2);
+        $query = <<<'GRAPHQL'
+        query($owner:String!, $name:String!, $number:Int!) {
+          repository(owner:$owner,name:$name) { pullRequest(number:$number) {
+            headRefOid reviewDecision latestReviews(last:10) { nodes { author { login } state } }
+            commits(last:1) { nodes { commit { statusCheckRollup {
+              state contexts(first:100) { totalCount nodes {
+                ... on CheckRun { name status conclusion }
+                ... on StatusContext { context state }
+              } }
+            } } } }
+          } }
+        }
+        GRAPHQL;
+        $result = $this->request('graphql', ['query' => $query, 'variables' => compact('owner', 'name', 'number')]);
+        $pull = $result['data']['repository']['pullRequest'] ?? null;
+        if (! is_array($pull)) {
+            throw new RuntimeException('GitHub could not load the review status.');
+        }
+
+        return $pull;
+    }
+
+    public function markReady(string $node): void
+    {
+        $response = $this->request('graphql', [
+            'query' => 'mutation($id:ID!) { markPullRequestReadyForReview(input:{pullRequestId:$id}) { pullRequest { isDraft } } }',
+            'variables' => ['id' => $node],
+        ]);
+        if (($response['data']['markPullRequestReadyForReview']['pullRequest']['isDraft'] ?? null) !== false) {
+            throw new RuntimeException('GitHub did not confirm the status change. Refresh the pull request.');
+        }
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function lineComments(string $repository, int $number, string $path): array
+    {
+        return $this->read('repos/'.$repository.'/pulls/'.$number.'/comments?per_page=100',
+            'map(select(.path == '.json_encode($path, JSON_THROW_ON_ERROR).' and .subject_type != "file") | {id, parent:.in_reply_to_id, line, side, author:.user.login, body})');
+    }
+
+    public function postLineComment(string $repository, int $number, string $commit, string $path, int $line, string $side, string $body): void
+    {
+        $this->request('repos/'.$repository.'/pulls/'.$number.'/comments', ['commit_id' => $commit] + compact('path', 'line', 'side', 'body'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function request(string $endpoint, array $payload): array
+    {
+        try {
+            $result = Process::timeout(30)->env(['GH_PROMPT_DISABLED' => '1', 'GH_NO_UPDATE_NOTIFIER' => '1'])
+                ->input(json_encode($payload, JSON_THROW_ON_ERROR))
+                ->run([$this->binary(), 'api', '--hostname', 'github.com', '--method', 'POST', '--input', '-', $endpoint]);
+        } catch (ProcessTimedOutException) {
+            throw new RuntimeException('GitHub took too long to respond. Refresh before trying again.');
+        }
+        $response = json_decode($result->output(), true);
+        if (! $result->successful() || ! is_array($response) || isset($response['errors'])) {
+            throw new RuntimeException('GitHub could not confirm the request. Check your access and refresh before trying again.');
+        }
+
+        return $response;
     }
 
     public function postComment(string $repository, int $number, string $body): void
