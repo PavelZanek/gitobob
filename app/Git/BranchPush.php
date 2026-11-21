@@ -7,7 +7,7 @@ use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\Process;
 
 /**
- * @phpstan-type Commits array{count:int, subjects:list<string>}
+ * @phpstan-type Commits array{count:int, subjects:array<string, string>}
  * @phpstan-type Preview array{branch:string, remote:string, target:string, destination:string, head:string, message:string, version:string, local:Commits, incoming:Commits, relation:string, canFetch:bool, canPush:bool, tracking:string, tip:string}
  */
 final class BranchPush
@@ -108,9 +108,17 @@ final class BranchPush
     private function commits(string $directory, string $range): array
     {
         $count = (int) $this->git($directory, ['rev-list', '--count', $range])->throw()->output();
-        $log = $count ? $this->git($directory, ['log', '--no-decorate', '--format=%h %s', '-100', $range])->throw()->output() : '';
+        $log = $count ? $this->git($directory, ['log', '--no-decorate', '--format=%H%x09%h %s', '-100', $range])->throw()->output() : '';
 
-        return ['count' => $count, 'subjects' => $count ? explode("\n", rtrim($log, "\n")) : []];
+        $subjects = [];
+        foreach (explode("\n", rtrim($log, "\n")) as $line) {
+            if ($line !== '') {
+                [$oid, $label] = explode("\t", $line, 2);
+                $subjects[$oid] = $label;
+            }
+        }
+
+        return ['count' => $count, 'subjects' => $subjects];
     }
 
     public function fetch(string $directory, string $version): string

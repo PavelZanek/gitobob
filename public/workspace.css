@@ -203,3 +203,4 @@ header .app-modes + .settings-link { margin-left: 0; }
     .sync-comparison { grid-template-columns: 1fr; }
     .sync-comparison section + section { border-inline-start: 0; border-top: 1px solid var(--line); }
 }
+.sync-detail { margin-top: 16px; }

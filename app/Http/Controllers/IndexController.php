@@ -6,6 +6,7 @@ use App\Git\BranchPush;
 use App\Git\FileDiff;
 use App\Git\IndexActions;
 use App\Git\RepositoryScanner;
+use App\Git\RevisionDiff;
 use App\Git\StagedCommit;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -74,11 +75,41 @@ final class IndexController
         return to_route('repository', $request->only('repo'))->with('notice', 'Local commit created.')->with('committed', true);
     }
 
-    public function pushPreview(Request $request, RepositoryScanner $scanner, BranchPush $push): View
+    public function pushPreview(Request $request, RepositoryScanner $scanner, BranchPush $push, RevisionDiff $diff): View|RedirectResponse
     {
         $directory = $this->directory($request, $scanner);
+        $snapshot = $request->string('review')->toString();
+        $cacheKey = 'sync-review:'.hash('sha256', $directory).':';
+        if ($snapshot === '') {
+            $review = $push->preview($directory);
+            if ($review['relation'] !== '') {
+                Cache::put($cacheKey.$review['version'], $review, now()->addMinutes(30));
+            }
+        } else {
+            $review = Cache::get($cacheKey.$snapshot);
+            if ($review === null) {
+                return to_route('repository.push.preview', $request->only('repo'))->with('notice', 'Your comparison expired. Showing the current branch.');
+            }
+        }
 
-        return view('push', $push->preview($directory) + ['relative' => $request->query('repo'), 'name' => basename($directory)]);
+        $commit = $request->string('commit')->toString();
+        $detail = null;
+        $title = 'Incoming changes';
+        if ($commit !== '') {
+            $title = $review['local']['subjects'][$commit] ?? $review['incoming']['subjects'][$commit] ?? null;
+            abort_if($title === null, 404);
+            $base = $diff->parentTree($directory, $commit);
+            $tip = $commit;
+        } elseif ($review['relation'] === 'behind') {
+            $base = $review['head'];
+            $tip = $review['tip'];
+        }
+        if (isset($base, $tip)) {
+            $detail = $diff->review($directory, $base, $tip, $request->string('file')->toString());
+        }
+
+        return view('push', $review + ['relative' => $request->query('repo'), 'name' => basename($directory),
+            'detail' => $detail, 'detailTitle' => $title, 'commit' => $commit]);
     }
 
     public function sync(Request $request, RepositoryScanner $scanner, BranchPush $push, string $operation): RedirectResponse

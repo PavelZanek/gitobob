@@ -36,6 +36,14 @@ final class FileDiff
         return $this->read($command, $directory, $section === 'Untracked');
     }
 
+    public function between(string $directory, string $base, string $tip, ChangedFile $file): string
+    {
+        $paths = $file->originalPath === null ? [$file->path] : [$file->originalPath, $file->path];
+
+        return $this->read(['git', '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv',
+            '--submodule=short', '--find-renames', $base, $tip, '--', ...$paths], $directory, false);
+    }
+
     public function staged(string $directory): string
     {
         return $this->read(['git', 'diff', '--cached', '--no-color', '--no-ext-diff', '--no-textconv'], $directory, false);
