@@ -18,15 +18,18 @@ final class RepositoryScanner
             return null;
         }
 
-        $repository = false;
+        $status = null;
         if (in_array('.git', $entries, true)) {
             // Pin the working tree so an invalid marker cannot resolve to a parent repository.
-            $result = Process::run([
+            $result = Process::path($directory)->run([
                 'git', '--no-optional-locks', '-c', 'core.fsmonitor=false',
-                '--git-dir='.$directory.'/.git', '--work-tree='.$directory,
-                'status', '--porcelain=v2', '--untracked-files=no', '--ignore-submodules=all',
+                '--git-dir=.git', '--work-tree=.',
+                'status', '--porcelain=v2', '-z', '--branch', '--no-ahead-behind',
+                '--untracked-files=all', '--ignore-submodules=dirty',
             ]);
-            $repository = $result->successful();
+            if ($result->successful()) {
+                $status = RepositoryStatus::fromPorcelain($result->output());
+            }
         }
 
         $children = [];
@@ -42,8 +45,8 @@ final class RepositoryScanner
             }
         }
 
-        return $repository || $children !== []
-            ? new RepositoryFolder(basename($directory) ?: '/', $repository, $children)
+        return $status !== null || $children !== []
+            ? new RepositoryFolder(basename($directory) ?: '/', $status, $children)
             : null;
     }
 }

@@ -18,10 +18,21 @@
                 <button>{{ $path ? 'Change folder' : 'Choose folder' }}</button>
             </form>
         </section>
-        @if ($tree)
+        @if ($hasRepositories)
             <section class="panel" aria-label="Repository tree">
-                <div class="toolbar"><h2>Repositories</h2><a href="{{ route('workspace') }}">Refresh</a></div>
-                <ul class="tree">@include('folder', ['folder' => $tree])</ul>
+                <div class="toolbar">
+                    <h2>Repositories</h2>
+                    <div class="actions">
+                        <a class="filter" role="switch" aria-checked="{{ $onlyChanged ? 'true' : 'false' }}"
+                           href="{{ route('workspace', $onlyChanged ? [] : ['changed' => 1]) }}">Only changed</a>
+                        <a href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Refresh</a>
+                    </div>
+                </div>
+                @if ($tree)
+                    <ul class="tree">@include('folder', ['folder' => $tree])</ul>
+                @else
+                    <p class="clean-workspace">All repositories are clean.</p>
+                @endif
             </section>
         @elseif (! $path)
             <section class="empty"><h2>Choose a workspace folder</h2><p>GitoBob looks for Git repositories in this folder and its subfolders.</p></section>

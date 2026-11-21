@@ -30,7 +30,7 @@ it('remembers the chosen folder and shows nested and linked working trees', func
 
     $this->post('/workspace')->assertRedirect('/');
     $this->get('/')->assertOk()->assertSeeInOrder(['projects', 'linked', 'personal', 'Dvě slova'])
-        ->assertDontSee('unrelated')->assertDontSee('cycle');
+        ->assertSee('Detached HEAD')->assertDontSee('unrelated')->assertDontSee('cycle');
     expect(Storage::disk('local')->get('workspace.path'))->toBe($projects);
 });
 
@@ -51,4 +51,37 @@ it('shows the empty repository state and ignores dependency directories', functi
 
     $this->get('/')->assertOk()->assertSee('No repositories found')->assertDontSee('package');
     expect((new RepositoryScanner)->scan($root.'/missing'))->toBeNull();
+});
+
+it('shows branch and file counts and keeps only the paths to changed repositories', function (): void {
+    $root = Storage::disk('local')->path('workspace');
+    $project = $root.'/group/editor';
+    File::ensureDirectoryExists($project);
+    Process::run(['git', 'init', '-b', 'workspace-branch', $root])->throw();
+    Process::run(['git', 'init', '-b', 'feature/editor', $project])->throw();
+    Process::run(['git', 'init', '-b', 'clean-branch', $root.'/clean-sibling'])->throw();
+    file_put_contents($root.'/.git/info/exclude', "/group/\n/clean-sibling/\n");
+    Storage::disk('local')->put('workspace.path', $root);
+
+    $this->get('/')->assertSee('workspace-branch')->assertSee('feature/editor')
+        ->assertSee('clean-branch')->assertSee('0 changed files');
+    $this->get('/?changed=1')->assertSee('All repositories are clean.')->assertSee('Only changed');
+
+    file_put_contents($project.'/before.txt', 'original');
+    Process::run(['git', '-C', $project, 'add', 'before.txt'])->throw();
+    Process::run(['git', '-C', $project, '-c', 'user.name=Test', '-c', 'user.email=test@example.org', 'commit', '-m', 'Initial'])->throw();
+    Process::run(['git', '-C', $project, 'mv', 'before.txt', 'after.txt'])->throw();
+    file_put_contents($project.'/after.txt', 'unstaged edit');
+    $this->get('/?changed=1')->assertSee('1 changed file');
+
+    File::ensureDirectoryExists($project.'/new files');
+    file_put_contents($project."/new files/one\ntwo", 'new');
+    file_put_contents($project.'/new files/three', 'new');
+    file_put_contents($project.'/.git/info/exclude', "/ignored.txt\n");
+    file_put_contents($project.'/ignored.txt', 'ignored');
+
+    $this->get('/?changed=1')->assertOk()
+        ->assertSeeInOrder(['workspace</span>', 'group</span>', 'editor</span>', 'feature/editor', '3 changed files'], false)
+        ->assertDontSee('workspace-branch')->assertDontSee('clean-sibling')->assertDontSee('0 changed files');
+    $this->get('/')->assertSee('clean-sibling')->assertSee('3 changed files');
 });
