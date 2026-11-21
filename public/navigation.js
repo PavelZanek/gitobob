@@ -1,3 +1,4 @@
+import { initializeCloud } from './cloud.js';
 import { initializeReview } from './review.js';
 
 const loadingPanel = document.querySelector('.loading-panel');
@@ -87,6 +88,7 @@ document.addEventListener('click', async event => {
         document.querySelector('main').replaceWith(main);
         document.body.className = loaded.page.body.className;
         document.title = loaded.page.title;
+        initializeCloud();
         initializeReview();
         const files = main.querySelector('.review-files');
         if (files) files.scrollTop = scrollTop;
@@ -122,3 +124,4 @@ window.addEventListener('keydown', event => {
     if (event.key === 'Escape') cancelNavigation();
 });
 initializeReview();
+initializeCloud();

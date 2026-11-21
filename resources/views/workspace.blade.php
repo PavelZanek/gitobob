@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{{ asset('workspace.css') }}">
 </head>
 <body>
-    <header><strong>GitoBob</strong><span>Local repositories</span></header>
+    <header><strong>GitoBob</strong><span>Local repositories</span>@include('modes')</header>
     <main>
         <section class="heading">
             <div><h1>Workspace</h1>
