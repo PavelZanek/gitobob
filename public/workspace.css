@@ -185,3 +185,11 @@ header .app-modes + .settings-link { margin-left: 0; }
 .theme-choices { display: flex; gap: 15px; align-items: center; }
 .settings-depth input { width: 7em; border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; background: var(--surface); color: var(--ink); }
 .settings-depth p { margin-top: 6px; color: var(--muted); font-size: 13px; }
+
+.sync-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-block: 1px solid var(--line); }
+.sync-comparison section + section { border-inline-start: 1px solid var(--line); }
+.sync-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px; }
+@media (max-width: 600px) {
+    .sync-comparison { grid-template-columns: 1fr; }
+    .sync-comparison section + section { border-inline-start: 0; border-top: 1px solid var(--line); }
+}

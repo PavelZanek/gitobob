@@ -81,12 +81,20 @@ final class IndexController
         return view('push', $push->preview($directory) + ['relative' => $request->query('repo'), 'name' => basename($directory)]);
     }
 
-    public function push(Request $request, RepositoryScanner $scanner, BranchPush $push): RedirectResponse
+    public function sync(Request $request, RepositoryScanner $scanner, BranchPush $push, string $operation): RedirectResponse
     {
         $directory = $this->directory($request, $scanner);
         $data = $request->validate(['version' => ['required', 'string', 'size:64']]);
         $notice = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
-            fn (): string => $push->send($directory, $data['version']));
+            fn (): string => match ($operation) {
+                'fetch' => $push->fetch($directory, $data['version']),
+                'pull' => $push->pull($directory, $data['version']),
+                'push' => $push->send($directory, $data['version']),
+                default => abort(404),
+            });
+        if ($operation === 'pull') {
+            $scanner->forgetWorkspace();
+        }
 
         return to_route('repository.push.preview', $request->only('repo'))->with('notice', $notice);
     }
