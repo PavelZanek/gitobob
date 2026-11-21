@@ -23,6 +23,9 @@ if (filterBar) {
             const heading = list.previousElementSibling;
             if (heading?.matches('.section-title')) heading.hidden = list.hidden;
         }
+        for (const repository of document.querySelectorAll('.repository-files')) {
+            repository.hidden = !repository.querySelector('.files:not([hidden])');
+        }
         empty.hidden = [...lists].some(list => !list.hidden);
     }
 

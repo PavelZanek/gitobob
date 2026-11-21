@@ -102,3 +102,7 @@ summary { cursor: pointer; }
     .review-actions, .actions { flex-wrap: wrap; }
     .heading { align-items: start; }
 }
+
+.layout-picker [aria-current="page"] { color: var(--ink); background: var(--panel); border-color: var(--line); font-weight: 600; }
+.repo-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px; margin: 0; padding: 7px 12px; border-block: 1px solid var(--line); background: var(--surface); font-size: 13px; overflow-wrap: anywhere; }
+.diff-repository { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

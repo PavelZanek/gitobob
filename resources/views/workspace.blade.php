@@ -21,7 +21,10 @@
         @if ($hasRepositories)
             <section class="panel" aria-label="Repository tree">
                 <div class="toolbar">
-                    <h2>Repositories</h2>
+                    <nav class="layout-picker" aria-label="Workspace view">
+                        <a aria-current="page" href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Repositories</a>
+                        <a href="{{ route('changes', $onlyChanged ? ['changed' => 1] : []) }}">All changes</a>
+                    </nav>
                     <div class="actions">
                         <a class="filter" role="switch" aria-checked="{{ $onlyChanged ? 'true' : 'false' }}"
                            href="{{ route('workspace', $onlyChanged ? [] : ['changed' => 1]) }}">Only changed</a>

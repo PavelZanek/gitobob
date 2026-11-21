@@ -14,6 +14,23 @@ final readonly class RepositoryStatus
         $this->changedFiles = count($files);
     }
 
+    /** @return array<string, array<string, ChangedFile>> */
+    public function groups(bool $grouped): array
+    {
+        if (! $grouped) {
+            return $this->files === [] ? [] : ['All files' => $this->files];
+        }
+
+        $groups = array_fill_keys(['Staged', 'Unstaged', 'Untracked'], []);
+        foreach ($this->files as $id => $file) {
+            foreach (array_keys($file->sections) as $section) {
+                $groups[$section][$id] = $file;
+            }
+        }
+
+        return array_filter($groups);
+    }
+
     public static function read(string $directory): ?self
     {
         $result = Process::path($directory)->run([

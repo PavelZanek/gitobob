@@ -11,6 +11,22 @@ final readonly class RepositoryFolder
         public array $children,
     ) {}
 
+    /** @return array<string, RepositoryStatus> */
+    public function changedRepositories(string $relative = '.'): array
+    {
+        $repositories = [];
+        if ($this->status !== null && $this->status->changedFiles > 0) {
+            $repositories[$relative] = $this->status;
+        }
+
+        foreach ($this->children as $child) {
+            $path = $relative === '.' ? $child->name : $relative.'/'.$child->name;
+            $repositories += $child->changedRepositories($path);
+        }
+
+        return $repositories;
+    }
+
     public function onlyChanged(): ?self
     {
         $children = [];

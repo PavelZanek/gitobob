@@ -9,23 +9,41 @@
 </head>
 <body class="review-page">
     <header><strong>GitoBob</strong><a href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Workspace</a></header>
-    @php($query = ['repo' => $relative, 'changed' => $onlyChanged ?: null])
+    @php($reviewRoute = $allChanges ? 'changes' : 'repository')
+    @php($query = ['repo' => $relative === '' ? null : $relative, 'changed' => $onlyChanged ?: null])
     @php($selection = $query + ['file' => $fileId, 'diff' => $showDiff ? null : 'hidden'])
     <main class="repository-review">
         <section class="heading">
-            <div><h1>{{ $name }}</h1><p class="repository-meta"><small title="Current branch">{{ $status->branch }}</small>{{ $status->changedFiles }} {{ $status->changedFiles === 1 ? 'changed file' : 'changed files' }}</p></div>
-            <a class="button-link" href="{{ route('repository', $selection) }}">Refresh</a>
+            <div>
+                <h1>{{ $name }}</h1>
+                <p class="repository-meta">
+                    @if ($allChanges)
+                        {{ count($repositories) }} {{ count($repositories) === 1 ? 'repository' : 'repositories' }} ·
+                    @else
+                        <small title="Current branch">{{ $repositories[$relative]->branch }}</small>
+                    @endif
+                    {{ $total }} {{ $total === 1 ? 'changed file' : 'changed files' }}
+                </p>
+            </div>
+            <a class="button-link" href="{{ route($reviewRoute, $selection) }}">Refresh</a>
         </section>
         <section class="panel" aria-label="Changed files">
             <div class="toolbar">
-                <h2>Changes</h2>
+                @if ($allChanges)
+                    <nav class="layout-picker" aria-label="Workspace view">
+                        <a href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Repositories</a>
+                        <a aria-current="page" href="{{ route('changes', $onlyChanged ? ['changed' => 1] : []) }}">All changes</a>
+                    </nav>
+                @else
+                    <h2>Changes</h2>
+                @endif
                 <div class="review-actions">
-                    @if ($status->changedFiles > 0)
-                        <a class="button-link" href="{{ route('repository', $query + ['file' => $selected ? $fileId : null, 'diff' => $showDiff ? 'hidden' : null]) }}">{{ $showDiff ? 'Hide diff' : 'Show diff' }}</a>
+                    @if ($total > 0)
+                        <a class="button-link" href="{{ route($reviewRoute, $query + ['file' => $selected ? $fileId : null, 'diff' => $showDiff ? 'hidden' : null]) }}">{{ $showDiff ? 'Hide diff' : 'Show diff' }}</a>
                     @endif
                     <nav class="layout-picker" aria-label="File list layout">
                         @foreach (['all' => 'All files', 'grouped' => 'Group by status'] as $layout => $label)
-                            <a href="{{ route('repository', $selection + ['layout' => $layout]) }}"
+                            <a href="{{ route($reviewRoute, $selection + ['layout' => $layout]) }}"
                                @if ($grouped === ($layout === 'grouped')) aria-current="true" @endif>{{ $label }}</a>
                         @endforeach
                     </nav>
@@ -33,39 +51,46 @@
             </div>
             <div @class(['review-columns' => $showDiff && $selected])>
                 <div class="review-files">
-                    @if ($status->changedFiles > 0)
+                    @if ($total > 0)
                         <div class="file-filter" hidden>
                             <input type="search" placeholder="Filter files…" aria-label="Filter files by name or path">
                         </div>
                         <p class="no-matches" role="status" hidden>No matching files.</p>
                     @endif
-                    @if ($status->changedFiles === 0)
-                        <p class="clean-workspace">This repository is clean.</p>
+                    @if ($total === 0)
+                        <p class="clean-workspace">{{ $allChanges ? 'All repositories are clean.' : 'This repository is clean.' }}</p>
                     @endif
-                    @foreach ($groups as $section => $files)
-                        @if ($grouped)<h3 class="section-title">{{ $section }}</h3>@endif
-                        <ul class="files">
-                            @foreach ($files as $id => $file)
-                                <li>
-                                    <a href="{{ route('repository', $query + ['file' => $id]) }}#diff{{ $grouped ? '-'.strtolower($section) : '' }}"
-                                       @if ($id === $fileId) aria-current="true" @endif>
-                                        <span class="file-label">
-                                            <span class="filename">{{ basename($file->path) }}</span>
-                                            @if (dirname($file->path) !== '.')<span class="file-dir">{{ dirname($file->path) }}</span>@endif
-                                            @if ($file->originalPath !== null)<span class="file-origin">From {{ $file->originalPath }}</span>@endif
-                                        </span>
-                                        <span class="file-states">{{ $grouped ? $file->description($section) : implode(' · ', array_keys($file->sections)) }}</span>
-                                    </a>
-                                </li>
+                    @foreach ($groups as $repoPath => $sections)
+                        <div class="repository-files">
+                            @if ($allChanges)
+                                <h3 class="repo-title"><span>{{ $repoPath === '.' ? $rootName : $repoPath }}</span><small title="Current branch">{{ $repositories[$repoPath]->branch }}</small></h3>
+                            @endif
+                            @foreach ($sections as $section => $files)
+                                @if ($grouped)<h3 class="section-title">{{ $section }}</h3>@endif
+                                <ul class="files">
+                                    @foreach ($files as $id => $file)
+                                        <li>
+                                            <a href="{{ route($reviewRoute, ['repo' => $repoPath, 'file' => $id, 'changed' => $onlyChanged ?: null]) }}#diff{{ $grouped ? '-'.strtolower($section) : '' }}"
+                                               @if ((string) $repoPath === $relative && $id === $fileId) aria-current="true" @endif>
+                                                <span class="file-label">
+                                                    <span class="filename">{{ basename($file->path) }}</span>
+                                                    @if (dirname($file->path) !== '.')<span class="file-dir">{{ dirname($file->path) }}</span>@endif
+                                                    @if ($file->originalPath !== null)<span class="file-origin">From {{ $file->originalPath }}</span>@endif
+                                                </span>
+                                                <span class="file-states">{{ $grouped ? $file->description($section) : implode(' · ', array_keys($file->sections)) }}</span>
+                                            </a>
+                                        </li>
+                                    @endforeach
+                                </ul>
                             @endforeach
-                        </ul>
+                        </div>
                     @endforeach
                 </div>
                 @if ($showDiff && $fileId !== null)
                     <section id="diff" class="review-diff" aria-label="File diff">
                         @if ($selected)
                             <div class="toolbar">
-                                <h2 class="filename">{{ $selected->path }}</h2>
+                                <div>@if ($allChanges)<span class="diff-repository">{{ $relative === '.' ? $rootName : $relative }}</span>@endif<h2 class="filename">{{ $selected->path }}</h2></div>
                                 <label class="wrap-control"><input type="checkbox" id="wrap-lines">Wrap lines</label>
                             </div>
                             @foreach ($previews as $section => $patch)

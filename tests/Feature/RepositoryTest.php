@@ -82,3 +82,37 @@ it('handles stale selections and restricts details to repositories in the chosen
     $this->get('/repository?repo=.')->assertOk()->assertSee('This repository is clean')
         ->assertDontSee('Hide diff')->assertDontSee('Show diff')->assertDontSee('aria-label="File diff"', false);
 });
+
+it('switches between matching paths in different repositories within the workspace review', function (): void {
+    $plugin = $this->root.'/plugins/123';
+    File::ensureDirectoryExists($plugin);
+    Process::run(['git', 'init', '-b', 'feature/plugin', $plugin])->throw();
+    file_put_contents($this->repo.'/config.txt', "core version\n");
+    file_put_contents($plugin.'/config.txt', "plugin index\n");
+    Process::run(['git', '-C', $plugin, 'add', 'config.txt'])->throw();
+    file_put_contents($plugin.'/config.txt', "plugin edits\n");
+    Process::run(['git', 'init', $this->root.'/clean-project'])->throw();
+
+    $id = hash('sha256', 'config.txt');
+    $this->get('/')->assertSee('All changes');
+    $this->get('/changes')->assertOk()->assertSee('2 repositories')->assertSee('2 changed files')
+        ->assertSee('plugins/123')->assertDontSee('clean-project')->assertSee('+core version')->assertDontSee('plugin edits');
+    $selection = '/changes?repo=plugins%2F123&file='.$id;
+    $this->get($selection.'&layout=grouped')->assertCookie('file_layout', 'grouped')
+        ->assertSee('feature/plugin')->assertSeeInOrder(['Staged diff', '+plugin index', 'Unstaged diff', '+plugin edits'])
+        ->assertDontSee('+core version');
+    $this->get($selection.'&diff=hidden')->assertSee('Show diff')->assertDontSee('+plugin edits');
+
+    File::deleteDirectory($plugin);
+    $this->get($selection)->assertOk()->assertSee('no longer in the change list')->assertDontSee('+core version');
+    $this->get('/changes?repo=..&file='.$id)->assertDontSee('+core version');
+});
+
+it('handles a workspace root repository, a clean workspace and an unavailable folder in all changes', function (): void {
+    Storage::disk('local')->put('workspace.path', $this->repo);
+    $this->get('/changes')->assertOk()->assertSee('All repositories are clean.')->assertDontSee('Hide diff');
+    file_put_contents($this->repo.'/root.txt', "root change\n");
+    $this->get('/changes')->assertSee('client')->assertSee('+root change');
+    Storage::disk('local')->put('workspace.path', $this->root.'/missing');
+    $this->get('/changes')->assertRedirect('/');
+});
