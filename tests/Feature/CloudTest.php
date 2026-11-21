@@ -4,6 +4,7 @@ use App\Git\GitHubClient;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
+use Native\Desktop\Facades\Shell;
 
 it('opens the GitHub remote of a local project even when origin uses GitLab', function (): void {
     Storage::fake('local');
@@ -66,4 +67,58 @@ it('rejects invalid repositories and non-local requests before invoking GitHub',
     $this->get('/cloud/data?repository=owner/repo%3Fstate=closed')->assertNotFound();
     $this->get('http://untrusted.example/cloud/data')->assertForbidden();
     Process::assertNothingRan();
+});
+
+it('opens the first PR patch with all its hunks and switches files within the same snapshot', function (): void {
+    $requests = [];
+    Process::fake(function (PendingProcess $process) use (&$requests) {
+        $cmd = $process->command;
+        if ($cmd[1] === 'config') {
+            return Process::result('test-user');
+        }
+        expect(array_slice($cmd, 1, 5))->toBe(['api', '--hostname', 'github.com', '--method', 'GET']);
+        $requests[] = $endpoint = end($cmd);
+        $files = [
+            ['filename' => 'src/one.txt', 'previous_filename' => 'old.txt', 'status' => 'renamed', 'additions' => 2,
+                'deletions' => 2, 'limited' => false, 'patch' => "@@ -1 +1 @@\n-old\n+<first>\n@@ -90 +90 @@\n-last\n+end"],
+            ['filename' => 'asset.png', 'previous_filename' => null, 'status' => 'added', 'additions' => 0,
+                'deletions' => 0, 'limited' => false, 'patch' => ''],
+        ];
+        $data = match ($endpoint) {
+            'repos/example/private/pulls/7' => [['title' => 'Review files', 'head' => 'feature', 'base' => 'dev', 'changed_files' => 31]],
+            'repos/example/private/pulls/7/files?per_page=30&page=1' => $files,
+            'repos/example/private/pulls/7/files?per_page=30&page=2' => [array_merge($files[0], ['patch' => '@@ -3 +3 @@', 'limited' => true])],
+        };
+
+        return Process::result(json_encode($data, JSON_THROW_ON_ERROR));
+    });
+    $url = '/cloud/pulls/7?repository=example/private';
+    $this->get($url)->assertOk()->assertSee('Review files')->assertSee('Next')->assertSee('asset.png')
+        ->assertSee('From old.txt')->assertSee('+<first>')->assertSee('+end')->assertDontSee('Patch headers')
+        ->assertDontSee('<first>', false);
+    $this->get($url.'&snapshot=1&file='.hash('sha256', 'asset.png'))->assertOk()
+        ->assertSee('GitHub did not provide a text diff')->assertDontSee('+end');
+    expect($requests)->toHaveCount(2);
+    $this->get($url.'&page=2')->assertOk()->assertSee('Previous')->assertSee('Only the beginning')->assertDontSee('>Next<', false);
+    $this->get($url.'&snapshot=1&file='.hash('sha256', 'gone'))->assertOk()->assertSee('no longer on this page');
+});
+
+it('handles missing patch data, empty pull requests and an unavailable GitHub account', function (): void {
+    Process::fake(fn (PendingProcess $process) => match (true) {
+        $process->command[1] === 'config' => Process::result('test-user'),
+        str_contains(end($process->command), '/files?') => Process::result('[]'),
+        str_ends_with(end($process->command), '/8') => Process::result('[{"title":"Empty","head":"a","base":"b","changed_files":0}]'),
+        default => Process::result('', 'HTTP 404', 1),
+    });
+    $this->get('/cloud/pulls/8?repository=example/private')->assertOk()->assertSee('No changed files.');
+    $this->get('/cloud/pulls/9?repository=example/private')->assertSee('cannot access');
+    $this->get('/cloud/pulls/9?repository=../anything')->assertNotFound();
+    $this->get('/cloud/pulls/9?repository=example/private&page=101')->assertNotFound();
+    $this->get('http://untrusted.example/cloud/pulls/8?repository=example/private')->assertForbidden();
+});
+
+it('opens the selected pull request on GitHub in the system browser', function (): void {
+    $shell = Shell::fake();
+    $this->post('/cloud/pulls/4/open?repository=example/private')->assertNoContent();
+    $shell->assertOpenedExternal('https://github.com/example/private/pull/4/files');
 });

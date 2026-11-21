@@ -16,12 +16,12 @@
         <section class="panel">
             <div class="toolbar"><h2>Open pull requests ({{ count($snapshot['pulls']) }})</h2></div>
             @forelse ($snapshot['pulls'] as $pr)
-                <article class="cloud-row">
+                <a class="cloud-row pull-link" data-prefetch href="{{ route('cloud.pull', ['number' => $pr['number'], 'repository' => $repository]) }}">
                     <strong>{{ $pr['title'] }}</strong>
                     <p>#{{ $pr['number'] }} · {{ $pr['author'] }} @if ($pr['draft']) · Draft @endif</p>
                     <p class="cloud-refs">{{ $pr['head'] }} → {{ $pr['base'] }}</p>
                     <time datetime="{{ $pr['updated'] }}">{{ $pr['updated'] }}</time>
-                </article>
+                </a>
             @empty
                 <p class="clean-workspace">No open pull requests.</p>
             @endforelse

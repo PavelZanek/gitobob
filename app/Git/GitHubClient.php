@@ -11,6 +11,10 @@ final class GitHubClient
 {
     public const string REPOSITORY = '[A-Za-z0-9-]+/(?!\.{1,2}$)[A-Za-z0-9_.-]+';
 
+    public const int FILES_PER_PAGE = 30;
+
+    public const int MAX_PR_FILES = 3000;
+
     public function remote(string $directory): ?string
     {
         $result = Process::path($directory)->run(['git', 'config', '--null', '--get-regexp', '^remote\..*\.url$']);
@@ -65,13 +69,31 @@ final class GitHubClient
         ];
     }
 
+    /**
+     * @return array{pull: array<string, mixed>, files: list<mixed>}
+     *
+     * @throws RuntimeException when GitHub cannot return the pull request
+     */
+    public function pullRequest(string $repository, int $number, int $page): array
+    {
+        $endpoint = 'repos/'.$repository.'/pulls/'.$number;
+        [$pull] = $this->read($endpoint, '[{title, head:.head.label, base:.base.ref, changed_files}]', false);
+        $files = $this->read($endpoint.'/files?per_page='.self::FILES_PER_PAGE.'&page='.$page,
+            'map({filename, previous_filename, status, additions, deletions, patch: (.patch // "")[:65536], limited: ((.patch // "") | length > 65536)})', false);
+
+        return ['pull' => $pull, 'files' => $files];
+    }
+
     /** @return list<mixed> */
-    private function read(string $endpoint, string $projection): array
+    private function read(string $endpoint, string $projection, bool $paginate = true): array
     {
         try {
+            $command = [$this->binary(), 'api', '--hostname', 'github.com', '--method', 'GET'];
+            if ($paginate) {
+                $command[] = '--paginate';
+            }
             $result = Process::timeout(30)->env(['GH_PROMPT_DISABLED' => '1', 'GH_NO_UPDATE_NOTIFIER' => '1'])
-                ->run([$this->binary(), 'api', '--hostname', 'github.com', '--method', 'GET', '--paginate',
-                    '--jq', $projection.' | @json', $endpoint]);
+                ->run([...$command, '--jq', $projection.' | @json', $endpoint]);
         } catch (ProcessTimedOutException) {
             throw new RuntimeException('GitHub took too long to respond. Try refreshing.', 503);
         }

@@ -8,7 +8,9 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
+use Native\Desktop\Facades\Shell;
 use RuntimeException;
 
 final class CloudController
@@ -54,6 +56,58 @@ final class CloudController
         }
 
         return response()->view('cloud-data', compact('repository', 'snapshot'))->header('Cache-Control', 'no-store');
+    }
+
+    public function pull(Request $request, GitHubClient $github, int $number): Response
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT);
+        abort_unless(is_int($page) && $page >= 1 && $page <= ceil(GitHubClient::MAX_PR_FILES / GitHubClient::FILES_PER_PAGE), 404);
+        $file = $request->query('file');
+        abort_unless($file === null || (is_string($file) && preg_match('/^[a-f0-9]{64}$/D', $file)), 404);
+        $key = $github->cacheKey($repository.'/pull/'.$number.'/page/'.$page);
+        $cached = $request->boolean('snapshot') && $key !== null ? Cache::get($key) : null;
+        $error = null;
+        $detail = null;
+        try {
+            if (is_string($cached)) {
+                $detail = json_decode(Crypt::decryptString($cached), true, flags: JSON_THROW_ON_ERROR);
+            } else {
+                $detail = $github->pullRequest($repository, $number, $page);
+                if ($key !== null) {
+                    Cache::put($key, Crypt::encryptString(json_encode($detail, JSON_THROW_ON_ERROR)), now()->addMinutes(2));
+                }
+            }
+        } catch (RuntimeException $exception) {
+            if (! in_array($exception->getCode(), [401, 403, 503], true)) {
+                throw $exception;
+            }
+            if ($key !== null) {
+                Cache::forget($key);
+            }
+            $error = $exception->getMessage();
+        }
+
+        $files = [];
+        foreach ($detail['files'] ?? [] as $entry) {
+            $files[hash('sha256', $entry['filename'])] = $entry;
+        }
+        $selected = $files[$file ?? array_key_first($files)] ?? null;
+        $count = $detail['pull']['changed_files'] ?? 0;
+        $pages = (int) ceil(min($count, GitHubClient::MAX_PR_FILES) / GitHubClient::FILES_PER_PAGE);
+
+        return response()->view('cloud-pull', compact('repository', 'number', 'detail', 'files', 'selected', 'count', 'page', 'pages', 'file', 'error'))
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function openPull(Request $request, int $number): Response
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        Shell::openExternal('https://github.com/'.$repository.'/pull/'.$number.'/files');
+
+        return response()->noContent();
     }
 
     private function repository(Request $request): ?string

@@ -1,7 +1,7 @@
 @php
     $body = rtrim($patch, "\n");
     $start = strpos($body, "\n@@ ");
-    $hasHeaders = $start !== false;
+    $hasHeaders = $start !== false && ! str_starts_with($body, '@@ ');
     if ($hasHeaders) {
         $headers = substr($body, 0, $start);
         $body = substr($body, $start + 1);

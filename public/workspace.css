@@ -137,3 +137,9 @@ header .app-modes { margin-left: auto; }
 
 .cloud-filter { display: grid; gap: 4px; margin-top: 15px; color: var(--muted); font-size: 13px; }
 .cloud-filter input { width: 100%; font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+.pull-link { color: var(--ink); text-decoration: none; }
+.pull-link:hover, .pull-link:focus-visible { background: var(--surface); }
+.pull-link strong { color: var(--accent); }
+.pull-link:hover strong { text-decoration: underline; }
+.patch-count { color: light-dark(#852f3f, #ffc7ca); font: 12px var(--mono); }
+.patch-count b { color: var(--accent); font-weight: 500; }
