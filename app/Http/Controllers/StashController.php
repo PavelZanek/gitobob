@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Git\ConflictReview;
 use App\Git\RepositoryScanner;
+use App\Git\RepositoryStatus;
 use App\Git\Stashes;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -39,11 +41,23 @@ final class StashController extends Controller
         $data = $request->validate(['version' => ['required', 'string', 'size:64']] + ($operation === 'apply'
             ? ['stash' => ['required', 'string', 'max:64']]
             : ['target' => ['required', 'string', 'max:1024'], 'note' => ['nullable', 'string', 'max:512', 'not_regex:/\\x00/'], 'untracked' => ['sometimes', 'boolean']]));
-        $notice = Cache::lock('index:'.hash('sha256', $directory), 180)->block(5,
-            fn (): string => $operation === 'apply'
-                ? $stashes->apply($directory, $data['stash'], $data['version'])
-                : $stashes->saveAndSwitch($directory, $data['target'], $data['version'], $data['note'] ?? '', $request->boolean('untracked')));
+        [$notice, $conflicts] = Cache::lock('index:'.hash('sha256', $directory), 180)->block(5, function () use ($operation, $directory, $data, $stashes, $request): array {
+            if ($operation !== 'apply') {
+                return [$stashes->saveAndSwitch($directory, $data['target'], $data['version'], $data['note'] ?? '', $request->boolean('untracked')), []];
+            }
+            $before = RepositoryStatus::read($directory)?->conflicts() ?? [];
+            $notice = $stashes->apply($directory, $data['stash'], $data['version']);
+            $after = RepositoryStatus::read($directory)?->conflicts() ?? [];
+
+            return [$notice, array_diff_key($after, $before)];
+        });
         $scanner->forgetWorkspace();
+        if ($conflicts !== []) {
+            $request->session()->put('stash-conflicts.'.hash('sha256', $directory),
+                array_map(ConflictReview::identity(...), $conflicts));
+
+            return to_route('repository.conflicts', $request->only('repo', 'changed') + ['file' => array_key_first($conflicts)])->with('notice', $notice);
+        }
 
         return to_route('repository', $request->only('repo', 'changed'))->with('notice', $notice);
     }

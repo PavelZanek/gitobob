@@ -31,6 +31,12 @@ final readonly class RepositoryStatus
         return array_filter($groups);
     }
 
+    /** @return array<string, ChangedFile> */
+    public function conflicts(): array
+    {
+        return array_filter($this->files, static fn (ChangedFile $file): bool => ($file->sections['Unstaged'] ?? null) === 'U');
+    }
+
     public static function read(string $directory): ?self
     {
         $result = Process::path($directory)->run([

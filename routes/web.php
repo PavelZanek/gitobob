@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CloudController;
+use App\Http\Controllers\ConflictController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\SettingsController;
@@ -16,6 +17,9 @@ Route::post('/workspace', [WorkspaceController::class, 'choose'])->name('workspa
 Route::get('/repository', RepositoryController::class)->name('repository');
 Route::get('/repository/branches', [IndexController::class, 'branches'])->name('repository.branches');
 Route::post('/repository/branches', [IndexController::class, 'changeBranch'])->name('repository.branches.change');
+Route::get('/repository/conflicts', [ConflictController::class, 'index'])->name('repository.conflicts');
+Route::post('/repository/conflicts/editor', [ConflictController::class, 'editor'])->name('repository.conflicts.editor');
+Route::post('/repository/conflicts/resolve', [ConflictController::class, 'resolve'])->name('repository.conflicts.resolve');
 Route::get('/repository/stashes', [StashController::class, 'index'])->name('repository.stashes');
 Route::get('/repository/stash-switch', [StashController::class, 'preview'])->name('repository.stash.preview');
 Route::post('/repository/stash-switch', [StashController::class, 'change'])->defaults('operation', 'save')->name('repository.stash.save');

@@ -215,3 +215,7 @@ header .app-modes + .settings-link { margin-left: 0; }
 .branch-create input { width: 100%; }
 .publish-remote { display: flex; align-items: center; gap: 8px; }
 .branch-create input.stash-option { width: auto; }
+.conflict-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.conflict-sides section + section { border-left: 1px solid var(--line); }
+.conflict-sides pre, .conflict-result { margin: 0; padding: 10px 14px; max-height: 30vh; overflow: auto; font: 12px/1.55 var(--mono); tab-size: 4; }
+@media (max-width: 650px) { .conflict-sides { grid-template-columns: 1fr; } }

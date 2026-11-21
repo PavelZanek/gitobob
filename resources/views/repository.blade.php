@@ -33,6 +33,9 @@
         @if (session('notice'))<p class="action-notice branch-message" role="status">{{ session('notice') }}
             @if (session('committed'))<a href="{{ route('repository.push.preview', $query) }}">Sync…</a>@endif
         </p>@endif
+        @if (! $allChanges && ($remaining = count($repositories[$relative]->conflicts())))
+            <p class="action-notice"><a href="{{ route('repository.conflicts', $query) }}">{{ $remaining }} conflicted {{ Str::plural('file', $remaining) }} · Review conflicts</a></p>
+        @endif
         <section class="panel" aria-label="Changed files">
             <div class="toolbar">
                 @if ($allChanges)

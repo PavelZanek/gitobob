@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        View::composer(['workspace', 'repository', 'branches', 'stashes', 'stash-switch', 'commit', 'push', 'cloud', 'cloud-pull', 'settings'],
+        View::composer(['workspace', 'repository', 'branches', 'conflicts', 'stashes', 'stash-switch', 'commit', 'push', 'cloud', 'cloud-pull', 'settings'],
             static fn (Page $page): Page => $page->with('preferences', Preferences::read()));
     }
 }
