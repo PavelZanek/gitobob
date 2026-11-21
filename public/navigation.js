@@ -292,6 +292,36 @@ document.addEventListener('submit', event => {
     }
 });
 
+function resetPullSubmission(form) {
+    form.removeAttribute('aria-busy');
+    for (const control of form.elements) control.disabled = false;
+    form.parentElement.querySelector('[data-compose-status]').textContent = '';
+}
+
+document.addEventListener('submit', event => {
+    const form = event.target;
+    if (!form.matches('[data-pull-compose]') || event.defaultPrevented) return;
+    if (form.getAttribute('aria-busy') === 'true') {
+        event.preventDefault();
+        return;
+    }
+    if (event.submitter?.value !== 'create') return;
+    form.setAttribute('aria-busy', 'true');
+    form.parentElement.querySelector('[data-compose-status]').textContent = 'Creating pull request…';
+    // Disable the controls only after the browser has collected their values, including the clicked button.
+    form.addEventListener('formdata', () => {
+        for (const control of form.elements) control.disabled = true;
+    }, { once: true });
+    window.navigation?.addEventListener('navigate', navigationEvent => {
+        navigationEvent.signal.addEventListener('abort', () => resetPullSubmission(form), { once: true });
+    }, { once: true });
+});
+
+window.addEventListener('pageshow', () => {
+    const form = document.querySelector('[data-pull-compose][aria-busy="true"]');
+    if (form) resetPullSubmission(form);
+});
+
 document.addEventListener('change', event => {
     if (event.target.matches('.settings-form input[name="theme"]')) {
         document.documentElement.dataset.theme = event.target.value;

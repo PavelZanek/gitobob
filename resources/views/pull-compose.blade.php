@@ -10,7 +10,7 @@
 <main class="branch-page">
     <section class="heading"><div><h1>New pull request</h1><p class="repository-meta">{{ $action['source'] }} · {{ $head['target'] }} → {{ $action['repository'] }} · {{ $base['target'] }}</p></div></section>
     <section class="panel">
-        <form class="write-form branch-create" method="post" action="{{ route('repository.compare.compose', $query + ['identity' => $identity]) }}">
+        <form data-pull-compose class="write-form branch-create" method="post" action="{{ route('repository.compare.compose', $query + ['identity' => $identity]) }}">
             @csrf
             <label for="pr-title">Title</label>
             <input id="pr-title" name="title" value="{{ old('title', $draft['title']) }}" maxlength="256" required>
@@ -20,8 +20,9 @@
             @error('body')<span role="alert">{{ $message }}</span>@enderror
             <label for="pr-mode">Review status</label>
             <select id="pr-mode" name="mode"><option value="draft" @selected(old('mode', $draft['mode']) === 'draft')>Draft</option><option value="ready" @selected(old('mode', $draft['mode']) === 'ready')>Ready for review</option></select>
-            <div class="actions"><button name="intent" value="create">Create pull request</button><button name="intent" value="review" formnovalidate>Save and review diff</button></div>
+            <div class="actions"><button name="intent" value="create"><span class="compose-idle">Create pull request</span><span class="compose-pending">Creating pull request…</span></button><button name="intent" value="review" formnovalidate>Save and review diff</button></div>
         </form>
+        <span class="navigation-status" role="status" data-compose-status></span>
     </section>
 </main>
 @include('loading')

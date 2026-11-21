@@ -224,3 +224,11 @@ header .app-modes + .settings-link { margin-left: 0; }
 .compare-picker select { max-width: min(36vw, 30em); }
 .compare-action { min-height: 44px; }
 .compare-action [data-cloud-status], .comparison-destination span { color: var(--muted); font-size: 13px; }
+.compose-pending, [data-pull-compose][aria-busy="true"] .compose-idle { display: none; }
+[data-pull-compose][aria-busy="true"] .compose-pending { display: inline-flex; align-items: center; gap: 7px; }
+.compose-pending::before { content: ""; width: .8em; height: .8em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: compose-spin .8s linear infinite; }
+[data-pull-compose][aria-busy="true"] button { cursor: wait; }
+@keyframes compose-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+    .compose-pending::before { animation: none; }
+}
