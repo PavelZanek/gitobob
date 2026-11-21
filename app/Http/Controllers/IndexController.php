@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Git\BranchPush;
 use App\Git\FileDiff;
 use App\Git\IndexActions;
 use App\Git\RepositoryScanner;
@@ -70,6 +71,23 @@ final class IndexController
         }
         $scanner->forgetWorkspace();
 
-        return to_route('repository', $request->only('repo'))->with('notice', 'Local commit created.');
+        return to_route('repository', $request->only('repo'))->with('notice', 'Local commit created.')->with('committed', true);
+    }
+
+    public function pushPreview(Request $request, RepositoryScanner $scanner, BranchPush $push): View
+    {
+        $directory = $this->directory($request, $scanner);
+
+        return view('push', $push->preview($directory) + ['relative' => $request->query('repo'), 'name' => basename($directory)]);
+    }
+
+    public function push(Request $request, RepositoryScanner $scanner, BranchPush $push): RedirectResponse
+    {
+        $directory = $this->directory($request, $scanner);
+        $data = $request->validate(['version' => ['required', 'string', 'size:64']]);
+        $notice = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
+            fn (): string => $push->send($directory, $data['version']));
+
+        return to_route('repository.push.preview', $request->only('repo'))->with('notice', $notice);
     }
 }

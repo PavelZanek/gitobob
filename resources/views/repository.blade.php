@@ -30,7 +30,9 @@
             </div>
             <a class="button-link" href="{{ route($reviewRoute, $selection) }}">Refresh</a>
         </section>
-        @if (session('notice'))<p class="action-notice" role="status">{{ session('notice') }}</p>@endif
+        @if (session('notice'))<p class="action-notice" role="status">{{ session('notice') }}
+            @if (session('committed'))<a href="{{ route('repository.push.preview', $query) }}">Push commits…</a>@endif
+        </p>@endif
         <section class="panel" aria-label="Changed files">
             <div class="toolbar">
                 @if ($allChanges)
@@ -42,6 +44,9 @@
                     <h2>Changes</h2>
                 @endif
                 <div class="review-actions">
+                    @if (! $allChanges && ! session('committed'))
+                        <a class="button-link" href="{{ route('repository.push.preview', $query) }}">Push commits…</a>
+                    @endif
                     @if (isset($repositories[$relative]) && collect($repositories[$relative]->files)->contains(fn ($file) => isset($file->sections['Staged'])))
                         <a class="button-link" href="{{ route('repository.commit.preview', ['repo' => $relative]) }}">Commit staged…@if ($allChanges) · {{ $relative === '.' ? $rootName : $relative }}@endif</a>
                     @endif

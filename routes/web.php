@@ -13,6 +13,8 @@ Route::get('/repository', RepositoryController::class)->name('repository');
 Route::post('/repository/index', [IndexController::class, 'change'])->name('repository.index');
 Route::get('/repository/commit', [IndexController::class, 'preview'])->name('repository.commit.preview');
 Route::post('/repository/commit', [IndexController::class, 'commit'])->name('repository.commit');
+Route::get('/repository/push', [IndexController::class, 'pushPreview'])->name('repository.push.preview');
+Route::post('/repository/push', [IndexController::class, 'push'])->name('repository.push');
 Route::get('/changes', [RepositoryController::class, 'changes'])->name('changes');
 
 Route::get('/cloud', [CloudController::class, 'index'])->name('cloud');
