@@ -17,22 +17,40 @@ afterEach(function (): void {
     File::deleteDirectory(Storage::disk('local')->path(''));
 });
 
-it('lists a partially staged file once or in both groups and loads its two diffs on selection', function (): void {
+it('opens both diffs for a partially staged file and can collapse the preview in either layout', function (): void {
     $path = 'notes [draft].txt';
     file_put_contents($this->repo.'/'.$path, "index version\n");
     Process::run(['git', '-C', $this->repo, 'add', '--', $path])->throw();
     file_put_contents($this->repo.'/'.$path, "working version\n");
     $url = '/repository?repo=client';
     $this->get('/')->assertSee('repo=client', false);
-    $flat = $this->get($url)->assertOk()->assertSee('Staged · Unstaged')->assertDontSee('index version');
+    $this->get($url)->assertOk()->assertSee('Hide diff')
+        ->assertSeeInOrder(['Staged diff', '+index version', 'Unstaged diff', '-index version', '+working version']);
+    $flat = $this->get($url.'&diff=hidden')->assertOk()->assertSee('Show diff')
+        ->assertSee('Staged · Unstaged')->assertDontSee('index version')->assertDontSee('aria-label="File diff"', false);
     expect(substr_count($flat->getContent(), $path))->toBe(1);
-    $grouped = $this->get($url.'&layout=grouped')->assertOk()->assertCookie('file_layout', 'grouped')->assertSee('Added')->assertSee('Modified');
+    $grouped = $this->get($url.'&layout=grouped&diff=hidden')->assertOk()->assertCookie('file_layout', 'grouped')->assertSee('Added')->assertSee('Modified');
     expect(substr_count($grouped->getContent(), $path))->toBe(2);
     $this->withCookie('file_layout', 'grouped')->get($url)->assertSee('Modified');
     $this->get($url.'&layout=all')->assertCookie('file_layout', 'all');
 
     $this->get($url.'&file='.hash('sha256', $path))->assertOk()
         ->assertSeeInOrder(['Staged diff', '+index version', 'Unstaged diff', '-index version', '+working version']);
+});
+
+it('opens the first visible file and keeps an explicit selection when the preview is reopened', function (): void {
+    file_put_contents($this->repo.'/alpha.txt', "alpha preview\n");
+    file_put_contents($this->repo.'/zulu.txt', "zulu preview\n");
+    Process::run(['git', '-C', $this->repo, 'add', 'zulu.txt'])->throw();
+
+    $url = '/repository?repo=client';
+    $this->get($url)->assertSee('+alpha preview')->assertDontSee('+zulu preview');
+    $this->get($url.'&layout=grouped')->assertSee('+zulu preview')->assertDontSee('+alpha preview');
+
+    $selection = $url.'&file='.hash('sha256', 'zulu.txt');
+    $this->get($selection.'&diff=hidden')->assertSee('Show diff')->assertDontSee('+zulu preview')
+        ->assertSee('href="'.e(url($selection)).'">Show diff', false);
+    $this->get($selection)->assertSee('+zulu preview')->assertDontSee('+alpha preview');
 });
 
 it('previews a renamed file, binary content and new files with literal paths', function (): void {
@@ -61,5 +79,6 @@ it('handles stale selections and restricts details to repositories in the chosen
     Process::run(['git', 'init', $this->root.'/Space project '])->throw();
     $this->get('/repository?repo=Space%20project%20')->assertOk()->assertSee('This repository is clean');
     Storage::disk('local')->put('workspace.path', $this->repo);
-    $this->get('/repository?repo=.')->assertOk()->assertSee('This repository is clean');
+    $this->get('/repository?repo=.')->assertOk()->assertSee('This repository is clean')
+        ->assertDontSee('Hide diff')->assertDontSee('Show diff')->assertDontSee('aria-label="File diff"', false);
 });

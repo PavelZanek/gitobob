@@ -22,16 +22,20 @@ final class RepositoryController
         abort_if($status === null, 404);
 
         $grouped = $request->query('layout', $request->cookie('file_layout')) === 'grouped';
-        $fileId = $request->query('file');
-        $selected = is_string($fileId) ? ($status->files[$fileId] ?? null) : null;
-        $groups = [];
+        $groups = array_fill_keys($grouped ? ['Staged', 'Unstaged', 'Untracked'] : ['All files'], []);
         $previews = [];
         foreach ($status->files as $id => $file) {
             foreach ($grouped ? array_keys($file->sections) : ['All files'] as $section) {
                 $groups[$section][$id] = $file;
             }
         }
-        if ($selected !== null) {
+        $groups = array_filter($groups);
+        $firstGroup = reset($groups);
+        $defaultFile = $firstGroup === false ? null : array_key_first($firstGroup);
+        $fileId = $request->query('file', $defaultFile);
+        $selected = is_string($fileId) ? ($status->files[$fileId] ?? null) : null;
+        $showDiff = $request->query('diff') !== 'hidden';
+        if ($showDiff && $selected !== null) {
             foreach (array_keys($selected->sections) as $section) {
                 $previews[$section] = $diff->preview($directory, $selected, $section);
             }
@@ -40,7 +44,7 @@ final class RepositoryController
         $response = response()->view('repository', [
             'name' => basename($directory) ?: '/', 'relative' => $relative, 'status' => $status,
             'grouped' => $grouped, 'groups' => $groups, 'fileId' => $fileId, 'selected' => $selected,
-            'previews' => $previews, 'onlyChanged' => $request->boolean('changed'),
+            'showDiff' => $showDiff, 'previews' => $previews, 'onlyChanged' => $request->boolean('changed'),
         ]);
         if ($request->has('layout')) {
             $response->withCookie(cookie()->forever('file_layout', $grouped ? 'grouped' : 'all'));

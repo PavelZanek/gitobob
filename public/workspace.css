@@ -43,3 +43,15 @@ small { display: inline-block; margin-left: 10px; padding: 2px 6px; border-radiu
 .patch .deletion { color: light-dark(#9b2832, #ffaaaa); background: light-dark(#fff0f0, #422b2c); }
 .patch .hunk { color: var(--muted); }
 @media (max-width: 540px) { .files li a { flex-wrap: wrap; gap: 4px; } }
+.repository-review { max-width: 1600px; padding-inline: clamp(16px, 3vw, 44px); }
+.review-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.review-columns { display: grid; grid-template-columns: minmax(230px, 31%) minmax(0, 1fr); }
+.review-columns > * { min-width: 0; max-height: max(320px, calc(100vh - 265px)); overflow: auto; }
+.review-columns .files li a { display: grid; gap: 3px; }
+.review-columns .review-diff { border-left: 1px solid var(--line); }
+.review-diff .toolbar { padding-block: 12px; }
+@media (max-width: 740px) {
+    .review-columns { display: flex; flex-direction: column; }
+    .review-columns .review-diff { order: -1; max-height: 50vh; border-left: 0; border-bottom: 1px solid var(--line); }
+    .review-columns .review-files { max-height: none; }
+}
