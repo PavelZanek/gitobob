@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CloudController;
 use App\Http\Controllers\ConflictController;
+use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\SettingsController;
@@ -15,6 +16,7 @@ Route::post('/settings', [SettingsController::class, 'update'])->name('settings.
 Route::post('/workspace', [WorkspaceController::class, 'choose'])->name('workspace.choose');
 
 Route::get('/repository', RepositoryController::class)->name('repository');
+Route::get('/repository/history', HistoryController::class)->name('repository.history');
 Route::get('/repository/branches', [IndexController::class, 'branches'])->name('repository.branches');
 Route::post('/repository/branches', [IndexController::class, 'changeBranch'])->name('repository.branches.change');
 Route::get('/repository/conflicts', [ConflictController::class, 'index'])->name('repository.conflicts');

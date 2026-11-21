@@ -73,31 +73,7 @@
     @if ($detail !== null)
         <section class="panel sync-detail" aria-label="Changed files">
             <div class="toolbar"><div><h2>{{ $detailTitle }}</h2><span class="repository-meta">{{ count($detail['files']) }} changed {{ Str::plural('file', count($detail['files'])) }} · {{ $commit ? (isset($local['subjects'][$commit]) ? 'Local only' : 'Remote only') : substr($head, 0, 8).' → '.substr($tip, 0, 8) }}</span></div></div>
-            @if ($detail['files'])
-                <div class="review-columns">
-                    <nav class="review-files" aria-label="Select a changed file">
-                        <ul class="files">
-                            @foreach ($detail['files'] as $id => $file)
-                                <li><a href="{{ route('repository.push.preview', $comparison + ['commit' => $commit ?: null, 'file' => $id]) }}#sync-diff" @if ($detail['selected'] === $file) aria-current="true" @endif>
-                                    <span class="file-label"><span class="filename">{{ $file->path }}</span>
-                                    @if ($file->originalPath !== null)<span class="file-origin">From {{ $file->originalPath }}</span>@endif</span>
-                                    <span class="file-states">{{ $file->description('Sync') }}</span>
-                                </a></li>
-                            @endforeach
-                        </ul>
-                    </nav>
-                    <section id="sync-diff" class="review-diff" aria-label="File diff">
-                        @if ($detail['selected'])
-                            <div class="toolbar"><h2 class="filename">{{ $detail['selected']->path }}</h2><label class="wrap-control"><input type="checkbox" id="wrap-lines">Wrap lines</label></div>
-                            @include('patch', ['patch' => $detail['patch'], 'section' => 'Sync'])
-                        @else
-                            <p class="clean-workspace">Select a file to see its diff.</p>
-                        @endif
-                    </section>
-                </div>
-            @else
-                <p class="clean-workspace">No files changed in this comparison.</p>
-            @endif
+            @include('revision-files', ['detailRoute' => 'repository.push.preview', 'detailQuery' => $comparison + ['commit' => $commit ?: null], 'fileHistoryTip' => $commit ?: $tip])
         </section>
     @endif
 </main>

@@ -75,7 +75,7 @@ final class IndexController extends Controller
         $back = to_route('repository.commit.preview', $request->only('repo'))->withInput($request->only('message'));
         try {
             $created = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
-                fn (): bool => $commit->create($directory, $data['version'], $data['message']));
+                fn (): ?string => $commit->create($directory, $data['version'], $data['message']));
         } catch (RuntimeException) {
             return $back->with('notice', 'Git could not create the commit. Check your Git identity, signing and hooks.');
         }
@@ -84,7 +84,7 @@ final class IndexController extends Controller
         }
         $scanner->forgetWorkspace();
 
-        return to_route('repository', $request->only('repo'))->with('notice', 'Local commit created.')->with('committed', true);
+        return to_route('repository', $request->only('repo'))->with('notice', 'Local commit created.')->with('committed', $created);
     }
 
     public function pushPreview(Request $request, RepositoryScanner $scanner, BranchPush $push, RevisionDiff $diff): View|RedirectResponse

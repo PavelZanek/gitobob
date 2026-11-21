@@ -22,11 +22,11 @@ final class StagedCommit
         return ['branch' => $branch, 'summary' => $summary, 'version' => hash('sha256', serialize([$directory, $head, $branch, $raw]))];
     }
 
-    public function create(string $directory, string $version, string $message): bool
+    public function create(string $directory, string $version, string $message): ?string
     {
         $index = rtrim(Process::path($directory)->run(['git', 'rev-parse', '--path-format=absolute', '--git-path', 'index'])->throw()->output(), "\n");
         if (! is_file($index)) {
-            return false;
+            return null;
         }
         $snapshot = tempnam(dirname($index), 'gitobob-index-');
         if ($snapshot === false) {
@@ -39,12 +39,17 @@ final class StagedCommit
             $environment = ['GIT_INDEX_FILE' => $snapshot, 'GIT_TERMINAL_PROMPT' => '0'];
             $review = $this->preview($directory, $environment);
             if ($review['summary'] === '' || ! hash_equals($review['version'], $version)) {
-                return false;
+                return null;
             }
 
-            Process::path($directory)->env($environment)->input($message)->run(['git', 'commit', '--file=-'])->throw();
+            $result = Process::path($directory)->env($environment)->input($message)->run([
+                'git', '-c', 'core.abbrev=no', '-c', 'color.ui=false', 'commit', '--file=-',
+            ])->throw();
+            if (preg_match('/^\[[^\r\n]* ([0-9a-f]{40}|[0-9a-f]{64})\]/m', $result->output(), $match)) {
+                return $match[1];
+            }
 
-            return true;
+            return trim(Process::path($directory)->run(['git', 'rev-parse', 'HEAD'])->throw()->output());
         } finally {
             @unlink($snapshot);
         }

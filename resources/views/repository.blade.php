@@ -31,7 +31,7 @@
             <a class="button-link" href="{{ route($reviewRoute, $selection) }}">Refresh</a>
         </section>
         @if (session('notice'))<p class="action-notice branch-message" role="status">{{ session('notice') }}
-            @if (session('committed'))<a href="{{ route('repository.push.preview', $query) }}">Sync…</a>@endif
+            @if (session('committed'))<a href="{{ route('repository.history', $query + ['commit' => session('committed')]) }}">View commit</a> · <a href="{{ route('repository.push.preview', $query) }}">Sync…</a>@endif
         </p>@endif
         @if (! $allChanges && ($remaining = count($repositories[$relative]->conflicts())))
             <p class="action-notice"><a href="{{ route('repository.conflicts', $query) }}">{{ $remaining }} conflicted {{ Str::plural('file', $remaining) }} · Review conflicts</a></p>
@@ -47,7 +47,8 @@
                     <h2>Changes</h2>
                 @endif
                 <div class="review-actions">
-                    @unless ($allChanges)<a class="button-link" href="{{ route('repository.stashes', $query) }}">Stashes</a>@endunless
+                    @unless ($allChanges)<a class="button-link" href="{{ route('repository.history', $query) }}">History</a>
+                    <a class="button-link" href="{{ route('repository.stashes', $query) }}">Stashes</a>@endunless
                     @if (! $allChanges && ! session('committed'))
                         <a class="button-link" href="{{ route('repository.push.preview', $query) }}">Sync…</a>
                     @endif
@@ -107,6 +108,7 @@
                         @if ($selected)
                             <div class="toolbar">
                                 <div>@if ($allChanges)<span class="diff-repository">{{ $relative === '.' ? $rootName : $relative }}</span>@endif<h2 class="filename">{{ $selected->path }}</h2></div>
+                                <a class="button-link" href="{{ route('repository.history', $query + ['path' => $selected->originalPath ?? $selected->path]) }}">File history</a>
                                 <label class="wrap-control"><input type="checkbox" id="wrap-lines">Wrap lines</label>
                             </div>
                             <div class="pull-controls" data-local-navigation hidden>
