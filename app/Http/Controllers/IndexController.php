@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Git\BranchPush;
 use App\Git\FileDiff;
 use App\Git\IndexActions;
+use App\Git\LocalBranches;
 use App\Git\RepositoryScanner;
 use App\Git\RevisionDiff;
 use App\Git\StagedCommit;
@@ -28,6 +29,24 @@ final class IndexController
         abort_if($path === null, 404);
 
         return $path;
+    }
+
+    public function branches(Request $request, RepositoryScanner $scanner, LocalBranches $branches): View
+    {
+        $directory = $this->directory($request, $scanner);
+
+        return view('branches', $branches->listing($directory) + ['relative' => $request->query('repo'), 'name' => basename($directory)]);
+    }
+
+    public function changeBranch(Request $request, RepositoryScanner $scanner, LocalBranches $branches): RedirectResponse
+    {
+        $directory = $this->directory($request, $scanner);
+        $data = $request->validate(['operation' => ['required', 'in:switch,create'], 'branch' => ['required', 'string', 'max:1024'], 'version' => ['required', 'string', 'size:64']]);
+        $result = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
+            fn (): array => $branches->change($directory, $data['version'], $data['branch'], $data['operation'] === 'create'));
+        $scanner->forgetWorkspace();
+
+        return to_route($result['ok'] ? 'repository' : 'repository.branches', $request->only('repo', 'changed'))->with('notice', $result['message']);
     }
 
     public function change(Request $request, RepositoryScanner $scanner, IndexActions $index): RedirectResponse
@@ -81,7 +100,7 @@ final class IndexController
         $snapshot = $request->string('review')->toString();
         $cacheKey = 'sync-review:'.hash('sha256', $directory).':';
         if ($snapshot === '') {
-            $review = $push->preview($directory);
+            $review = $push->preview($directory, $request->string('remote')->toString());
             if ($review['relation'] !== '') {
                 Cache::put($cacheKey.$review['version'], $review, now()->addMinutes(30));
             }
@@ -120,6 +139,7 @@ final class IndexController
             fn (): string => match ($operation) {
                 'fetch' => $push->fetch($directory, $data['version']),
                 'pull' => $push->pull($directory, $data['version']),
+                'publish' => $push->publish($directory, $data['version'], $request->string('remote')->toString()),
                 'push' => $push->send($directory, $data['version']),
                 default => abort(404),
             });
@@ -127,6 +147,6 @@ final class IndexController
             $scanner->forgetWorkspace();
         }
 
-        return to_route('repository.push.preview', $request->only('repo'))->with('notice', $notice);
+        return to_route('repository.push.preview', $request->only('repo', 'remote'))->with('notice', $notice);
     }
 }

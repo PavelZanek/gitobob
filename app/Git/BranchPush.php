@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Process;
 
 /**
  * @phpstan-type Commits array{count:int, subjects:array<string, string>}
- * @phpstan-type Preview array{branch:string, remote:string, target:string, destination:string, head:string, message:string, version:string, local:Commits, incoming:Commits, relation:string, canFetch:bool, canPush:bool, tracking:string, tip:string}
+ * @phpstan-type Preview array{branch:string, remote:string, target:string, destination:string, head:string, message:string, version:string, local:Commits, incoming:Commits, relation:string, canFetch:bool, canPush:bool, canPublish:bool, publishMapping:string, remotes:list<string>, tracking:string, tip:string}
  */
 final class BranchPush
 {
@@ -20,22 +20,31 @@ final class BranchPush
     }
 
     /** @return Preview */
-    public function preview(string $directory): array
+    public function preview(string $directory, string $publishRemote = ''): array
     {
         $branch = trim($this->git($directory, ['symbolic-ref', '--quiet', 'HEAD'])->output());
         $head = trim($this->git($directory, ['rev-parse', '--verify', 'HEAD'])->output());
         $review = ['branch' => str_starts_with($branch, 'refs/heads/') ? substr($branch, 11) : 'Detached HEAD',
             'remote' => '', 'target' => '', 'destination' => '', 'head' => $head, 'message' => '',
             'version' => '', 'local' => ['count' => 0, 'subjects' => []], 'incoming' => ['count' => 0, 'subjects' => []],
-            'relation' => '', 'canFetch' => false, 'canPush' => false, 'tracking' => '', 'tip' => ''];
+            'relation' => '', 'canFetch' => false, 'canPush' => false, 'canPublish' => false, 'publishMapping' => '', 'remotes' => [], 'tracking' => '', 'tip' => ''];
         if ($branch === '' || $head === '') {
             return ['message' => 'Check out a branch with a commit to push.'] + $review;
         }
 
         $tracking = trim($this->git($directory, ['for-each-ref', '--format=%(upstream:remotename)%09%(upstream:remoteref)%09%(upstream)', '--', $branch])->output());
         [$remote, $target, $trackingRef] = array_pad(explode("\t", $tracking, 3), 3, '');
-        if ($remote === '' || $remote === '.' || ! str_starts_with($target, 'refs/heads/')) {
-            return ['message' => 'Set an upstream branch in Git to enable push.'] + $review;
+        $untracked = $remote === '' && ! $this->git($directory, ['config', '--get', 'branch.'.$review['branch'].'.merge'])->successful();
+        if ($untracked) {
+            $remotes = trim($this->git($directory, ['remote'])->output());
+            $review['remotes'] = $remotes === '' ? [] : explode("\n", $remotes);
+            $remote = $publishRemote !== '' ? $publishRemote : (in_array('origin', $review['remotes'], true) ? 'origin' : ($review['remotes'][0] ?? ''));
+            if (! in_array($remote, $review['remotes'], true)) {
+                return ['message' => $review['remotes'] === [] ? 'Add a Git remote to publish this branch.' : 'Select a remote to preview publication.'] + $review;
+            }
+            $target = $branch;
+        } elseif ($remote === '' || $remote === '.' || ! str_starts_with($target, 'refs/heads/')) {
+            return ['message' => 'Check the upstream settings for this branch.'] + $review;
         }
 
         $review['remote'] = $remote;
@@ -58,6 +67,33 @@ final class BranchPush
         }
 
         $upstream = explode("\t", trim($tip->output()))[0];
+        if ($untracked) {
+            if ($protected || $upstream !== '') {
+                return ['message' => $protected ? $protectedMessage : 'A branch with this name already exists on the remote. Choose another name or set its upstream in Git.'] + $review;
+            }
+            $config = 'remote.'.$remote.'.fetch';
+            $mappings = trim($this->git($directory, ['config', '--get-all', $config])->output());
+            $tracking = trim($this->git($directory, ['-c', 'branch.'.$review['branch'].'.remote='.$remote, '-c', 'branch.'.$review['branch'].'.merge='.$target,
+                'for-each-ref', '--format=%(upstream)', '--count=1', $branch])->output());
+            if ($tracking === '') {
+                // Single-branch clones only map the original branch. Add the published branch to that same namespace.
+                foreach (explode("\n", $mappings) as $mapping) {
+                    [$source, $destination] = array_pad(explode(':', ltrim($mapping, '+'), 2), 2, '');
+                    if (! str_starts_with($source, 'refs/heads/') || $destination !== 'refs/remotes/'.$remote.'/'.substr($source, 11)) {
+                        return ['message' => 'Configure the remote fetch mapping for this branch before publishing.'] + $review;
+                    }
+                }
+                $tracking = 'refs/remotes/'.$remote.'/'.$review['target'];
+                $review['publishMapping'] = '+'.$target.':'.$tracking;
+            }
+            if (! str_starts_with($tracking, 'refs/remotes/') || $this->git($directory, ['symbolic-ref', '--quiet', $tracking])->successful()) {
+                return ['message' => 'Check the remote tracking reference before publishing.'] + $review;
+            }
+            $review['tracking'] = $tracking;
+            $review['version'] = hash('sha256', serialize(['publish', $directory, $branch, $head, $remote, $urls, $target, $mappings]));
+
+            return ['canPublish' => true, 'message' => 'Publish commit '.substr($head, 0, 8).' as a new branch on this remote.'] + $review;
+        }
         if ($upstream === '') {
             return ['message' => $protected ? $protectedMessage : 'The upstream branch no longer exists. Check its tracking settings.'] + $review;
         }
@@ -171,6 +207,36 @@ final class BranchPush
         }
 
         return preg_replace('/^[^\/@:]+@/', '', $url) ?? '';
+    }
+
+    public function publish(string $directory, string $version, string $remote): string
+    {
+        $review = $this->preview($directory, $remote);
+        if (! $review['canPublish'] || ! hash_equals($review['version'], $version)) {
+            return 'Publish stopped. Review the current branch and destination.';
+        }
+
+        $ref = 'refs/heads/'.$review['target'];
+        $config = 'remote.'.$review['remote'].'.fetch';
+        $mapping = $review['publishMapping'];
+        $options = $mapping === '' ? [] : ['-c', $config.'='.$mapping];
+        try {
+            // An empty lease requires the destination to be absent at the time of the push.
+            $result = $this->git($directory, [...$options, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no',
+                '--force-with-lease='.$ref.':', '--', $review['remote'], $review['head'].':'.$ref]);
+        } catch (ProcessTimedOutException) {
+            return 'Publish timed out. Refresh to check whether the branch was created.';
+        }
+        if (! $result->successful()) {
+            return 'Git rejected publication. Refresh to check the destination and your permissions.';
+        }
+
+        $upstream = $review['remote'].'/'.$review['target'];
+        $mapped = $mapping === '' || $this->git($directory, ['config', '--add', $config, $mapping])->successful();
+        $tracked = $mapped && $this->git($directory, ['branch', '--set-upstream-to='.$review['tracking'], '--', $review['branch']])->successful();
+
+        return $tracked ? 'Published '.$upstream.' and set it as the upstream.'
+            : 'Published '.$upstream.'. Check the remote fetch mapping and set the upstream in Git.';
     }
 
     public function send(string $directory, string $version): string

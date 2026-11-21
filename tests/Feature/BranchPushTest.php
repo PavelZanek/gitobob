@@ -66,7 +66,7 @@ it('requires a tracked and permitted destination', function (): void {
     ($this->git)(['config', 'branch.dev.merge', 'refs/heads/main']);
     $this->get($this->url)->assertSee('This destination is protected')->assertDontSee('<form', false);
     ($this->git)(['branch', '--unset-upstream']);
-    $this->get($this->url)->assertSee('Set an upstream branch')->assertDontSee('<form', false);
+    $this->get($this->url)->assertSee('Publish branch')->assertSee('origin/dev');
     $this->post('/repository/push?repo=..', [])->assertNotFound();
 });
 
@@ -140,4 +140,31 @@ it('compares the advertised branch tips when fetch and push use different URLs',
     ($this->git)(['push', '../fork.git', 'HEAD:refs/heads/review']);
     ($this->git)(['config', 'remote.origin.pushurl', '../fork.git']);
     $this->get($this->url)->assertDontSee('>Fetch<', false)->assertDontSee('Pull (fast-forward)');
+});
+
+it('publishes the reviewed commit and tracks the selected remote for subsequent sync', function (): void {
+    ($this->git)(['switch', '--no-track', '-c', 'feature/guide']);
+    ($this->git)(['init', '--bare', '../second.git']);
+    ($this->git)(['remote', 'add', 'second', '../second.git']);
+    ($this->git)(['config', 'remote.second.fetch', '+refs/heads/dev:refs/remotes/second/dev']);
+    $page = $this->get($this->url.'&remote=second')->assertOk()->assertSee('second/feature/guide')->assertSee('Publish branch');
+    $this->followingRedirects()->post('/repository/publish?repo=demo', ['version' => $page->viewData('version'), 'remote' => 'second'])
+        ->assertSee('Published second/feature/guide')->assertSee('Up to date')->assertDontSee('Publish branch');
+    expect(($this->git)(['rev-parse', '--abbrev-ref', '@{upstream}']))->toBe('second/feature/guide')
+        ->and(($this->git)(['--git-dir=../second.git', 'rev-parse', 'feature/guide']))->toBe(($this->git)(['rev-parse', 'HEAD']))
+        ->and(($this->git)(['--git-dir=../remote.git', 'branch', '--list', 'feature/guide']))->toBe('');
+});
+
+it('refuses publication when the local tip moves or someone creates the destination', function (): void {
+    ($this->git)(['switch', '--no-track', '-c', 'feature/new']);
+    $publish = '/repository/publish?repo=demo';
+    $version = $this->get($this->url)->viewData('version');
+    ($this->git)(['commit', '--allow-empty', '-m', 'Later change']);
+    $this->followingRedirects()->post($publish, ['version' => $version])->assertSee('Publish stopped');
+    $version = $this->get($this->url)->viewData('version');
+    ($this->git)(['push', 'origin', $this->base.':refs/heads/feature/new']);
+    $this->followingRedirects()->post($publish, ['version' => $version])->assertSee('already exists on the remote')->assertDontSee('Publish branch');
+    expect(($this->git)(['--git-dir=../remote.git', 'rev-parse', 'feature/new']))->toBe($this->base);
+    ($this->git)(['switch', '--no-track', '-c', 'main']);
+    $this->get($this->url)->assertSee('destination is protected')->assertDontSee('Publish branch');
 });

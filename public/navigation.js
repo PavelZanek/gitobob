@@ -297,3 +297,11 @@ document.addEventListener('change', event => {
         document.documentElement.dataset.theme = event.target.value;
     }
 });
+
+document.addEventListener('input', event => {
+    if (!event.target.matches('[data-branch-search]')) return;
+    const query = event.target.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('[data-branch-name]');
+    for (const row of rows) row.hidden = !row.dataset.branchName.toLowerCase().includes(query);
+    document.querySelector('[data-no-branches]').hidden = [...rows].some(row => !row.hidden);
+});

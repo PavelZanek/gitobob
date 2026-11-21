@@ -13,6 +13,9 @@ Route::post('/settings', [SettingsController::class, 'update'])->name('settings.
 Route::post('/workspace', [WorkspaceController::class, 'choose'])->name('workspace.choose');
 
 Route::get('/repository', RepositoryController::class)->name('repository');
+Route::get('/repository/branches', [IndexController::class, 'branches'])->name('repository.branches');
+Route::post('/repository/branches', [IndexController::class, 'changeBranch'])->name('repository.branches.change');
+Route::post('/repository/publish', [IndexController::class, 'sync'])->defaults('operation', 'publish')->name('repository.publish');
 Route::post('/repository/index', [IndexController::class, 'change'])->name('repository.index');
 Route::get('/repository/commit', [IndexController::class, 'preview'])->name('repository.commit.preview');
 Route::post('/repository/commit', [IndexController::class, 'commit'])->name('repository.commit');

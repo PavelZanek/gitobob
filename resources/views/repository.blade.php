@@ -23,7 +23,7 @@
                     @if ($allChanges)
                         {{ count($repositories) }} {{ count($repositories) === 1 ? 'repository' : 'repositories' }} ·
                     @else
-                        <small title="Current branch">{{ $repositories[$relative]->branch }}</small>
+                        <a class="button-link branch-picker" href="{{ route('repository.branches', $query) }}" title="Switch or create a branch">{{ $repositories[$relative]->branch }} ▾</a>
                     @endif
                     {{ $total }} {{ $total === 1 ? 'changed file' : 'changed files' }}
                 </p>

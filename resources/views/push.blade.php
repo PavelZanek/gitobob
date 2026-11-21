@@ -16,13 +16,21 @@
         @if ($commit)
             <a class="button-link" href="{{ route('repository.push.preview', $comparison) }}">Back to branch sync</a>
         @else
-            <a class="button-link" href="{{ route('repository.push.preview', ['repo' => $relative]) }}">Refresh</a>
+            <a class="button-link" href="{{ route('repository.push.preview', ['repo' => $relative, 'remote' => $remote ?: null]) }}">Refresh</a>
         @endif
     </section>
     @if (session('notice') && session('notice') !== $message)<p class="action-notice" role="status">{{ session('notice') }}</p>@endif
     @if (! $commit)
     <section class="panel" aria-label="Branch comparison">
         <div class="toolbar"><h2>{{ $target ? $remote.'/'.$target : 'Push destination' }}</h2></div>
+        @if (count($remotes) > 1)
+            <form class="cloud-row publish-remote" method="get" action="{{ route('repository.push.preview') }}">
+                <input type="hidden" name="repo" value="{{ $relative }}">
+                <label for="publish-remote">Remote</label>
+                <select id="publish-remote" name="remote">@foreach ($remotes as $option)<option @selected($option === $remote)>{{ $option }}</option>@endforeach</select>
+                <button>Preview destination</button>
+            </form>
+        @endif
         @if ($destination)<p class="cloud-row cloud-refs">{{ $destination }}</p>@endif
         @if ($message)
             <p class="clean-workspace" role="status">{{ $message }}</p>
@@ -41,10 +49,11 @@
                 @endforeach
             </div>
         @endif
-        @if ($canFetch || $canPush)
+        @if ($canFetch || $canPush || $canPublish)
             <div class="sync-actions">
-                @foreach (array_filter(['fetch' => $canFetch ? 'Fetch' : null, 'push' => $canPush ? 'Push to '.$remote.'/'.$target : null, 'pull' => $relation === 'behind' ? 'Pull (fast-forward)' : null]) as $action => $label)
+                @foreach (array_filter(['publish' => $canPublish ? 'Publish branch' : null, 'fetch' => $canFetch ? 'Fetch' : null, 'push' => $canPush ? 'Push to '.$remote.'/'.$target : null, 'pull' => $relation === 'behind' ? 'Pull (fast-forward)' : null]) as $action => $label)
                     <form method="post" action="{{ route('repository.'.$action, ['repo' => $relative]) }}">
+                        @if ($action === 'publish')<input type="hidden" name="remote" value="{{ $remote }}">@endif
                         @csrf
                         <input type="hidden" name="version" value="{{ $version }}">
                         <button>{{ $label }}</button>

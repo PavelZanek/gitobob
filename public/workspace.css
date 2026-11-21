@@ -204,3 +204,13 @@ header .app-modes + .settings-link { margin-left: 0; }
     .sync-comparison section + section { border-inline-start: 0; border-top: 1px solid var(--line); }
 }
 .sync-detail { margin-top: 16px; }
+.branch-page { max-width: 800px; }
+.branch-picker, .branch-row > span:first-child { font-family: var(--mono); }
+.branch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; min-height: 42px; overflow-wrap: anywhere; }
+.branch-row + .branch-row { border-top: 1px solid var(--line); }
+.branch-row[hidden] { display: none; }
+.branch-row .repository-meta { margin: 0; }
+.branch-message { white-space: pre-wrap; }
+.branch-tools input, .branch-create input, .publish-remote select { min-width: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font: inherit; }
+.branch-create input { width: 100%; }
+.publish-remote { display: flex; align-items: center; gap: 8px; }
