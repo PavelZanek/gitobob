@@ -17,7 +17,7 @@ final class WorkspaceController
         $path = is_string($path) ? $path : null;
         $available = $path !== null && is_dir($path) && is_readable($path);
 
-        $tree = $available ? $scanner->scan($path) : null;
+        $tree = $available ? $scanner->workspaceTree($path, $request->boolean('snapshot')) : null;
         $onlyChanged = $request->boolean('changed');
 
         return view('workspace', [

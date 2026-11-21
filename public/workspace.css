@@ -106,3 +106,21 @@ summary { cursor: pointer; }
 .layout-picker [aria-current="page"] { color: var(--ink); background: var(--panel); border-color: var(--line); font-weight: 600; }
 .repo-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px; margin: 0; padding: 7px 12px; border-block: 1px solid var(--line); background: var(--surface); font-size: 13px; overflow-wrap: anywhere; }
 .diff-repository { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+.navigation-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.navigating::before { content: ""; position: fixed; z-index: 5; inset: 0 auto auto 0; height: 3px; width: 36%; background: var(--accent); animation: loading-progress 1.2s ease-in-out infinite alternate; pointer-events: none; }
+.loading-content .panel > :not(.toolbar), .loading-content .empty { display: none; }
+.loading-panel { border: 1px solid var(--line); border-radius: 0 0 10px 10px; background: var(--panel); }
+.loading-content .panel { border-bottom: 0; border-radius: 10px 10px 0 0; }
+.loading-content .panel .toolbar { border-bottom: 0; }
+.loading-columns { display: grid; grid-template-columns: 28% 1fr; min-height: 230px; }
+.loading-files, .loading-preview { padding: 18px; }
+.loading-files { border-right: 1px solid var(--line); }
+.loading-panel i { display: block; height: 12px; width: 75%; margin: 0 0 16px; border-radius: 4px; background: var(--line); animation: loading-pulse 1s ease-in-out infinite alternate; }
+.loading-panel i:nth-child(2n) { width: 54%; }
+.loading-panel i:nth-child(3n) { width: 90%; }
+@keyframes loading-progress { to { transform: translateX(175%); } }
+@keyframes loading-pulse { to { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+    .navigating::before, .loading-panel i { animation: none; }
+}

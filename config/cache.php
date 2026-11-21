@@ -1,5 +1,8 @@
 <?php
 
+use App\Git\ChangedFile;
+use App\Git\RepositoryFolder;
+use App\Git\RepositoryStatus;
 use Illuminate\Support\Str;
 
 return [
@@ -131,6 +134,10 @@ return [
     |
     */
 
-    'serializable_classes' => false,
+    'serializable_classes' => [
+        RepositoryFolder::class,
+        RepositoryStatus::class,
+        ChangedFile::class,
+    ],
 
 ];

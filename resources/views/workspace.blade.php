@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script type="module" src="{{ asset('navigation.js') }}"></script>
     <title>GitoBob · Repositories</title>
     <link rel="stylesheet" href="{{ asset('workspace.css') }}">
 </head>
@@ -22,12 +23,12 @@
             <section class="panel" aria-label="Repository tree">
                 <div class="toolbar">
                     <nav class="layout-picker" aria-label="Workspace view">
-                        <a aria-current="page" href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Repositories</a>
-                        <a href="{{ route('changes', $onlyChanged ? ['changed' => 1] : []) }}">All changes</a>
+                        <a aria-current="page" href="{{ route('workspace', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}">Repositories</a>
+                        <a data-prefetch href="{{ route('changes', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}">All changes</a>
                     </nav>
                     <div class="actions">
                         <a class="filter" role="switch" aria-checked="{{ $onlyChanged ? 'true' : 'false' }}"
-                           href="{{ route('workspace', $onlyChanged ? [] : ['changed' => 1]) }}">Only changed</a>
+                           href="{{ route('workspace', ['snapshot' => 1, 'changed' => $onlyChanged ? null : 1]) }}">Only changed</a>
                         <a class="button-link" href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Refresh</a>
                     </div>
                 </div>
@@ -45,5 +46,6 @@
             <section class="empty"><h2>No repositories found</h2><p>Choose a folder that contains a Git repository.</p><a href="{{ route('workspace') }}">Refresh</a></section>
         @endif
     </main>
+    @include('loading')
 </body>
 </html>

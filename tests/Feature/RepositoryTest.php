@@ -116,3 +116,35 @@ it('handles a workspace root repository, a clean workspace and an unavailable fo
     Storage::disk('local')->put('workspace.path', $this->root.'/missing');
     $this->get('/changes')->assertRedirect('/');
 });
+
+it('reuses the workspace scan for navigation while reading the selected repository live', function (): void {
+    file_put_contents($this->repo.'/notes.txt', "workspace version\n");
+    $this->get('/')->assertOk()->assertSee('changes?snapshot=1', false);
+    Process::run(['git', 'init', $this->root.'/new-repo'])->throw();
+    file_put_contents($this->root.'/new-repo/new.txt', 'new repository');
+    Process::run(['git', '-C', $this->repo, 'add', 'notes.txt'])->throw();
+    file_put_contents($this->repo.'/notes.txt', "latest version\n");
+
+    $this->get('/changes?snapshot=1')->assertOk()->assertDontSee('new-repo')
+        ->assertSeeInOrder(['Staged diff', '+workspace version', 'Unstaged diff', '+latest version']);
+    $this->get('/changes')->assertOk()->assertSee('new-repo');
+    $this->get('/?snapshot=1')->assertOk()->assertSee('new-repo');
+
+    File::deleteDirectory($this->repo);
+    $this->get('/changes?snapshot=1&repo=client&file='.hash('sha256', 'notes.txt'))
+        ->assertOk()->assertSee('no longer in the change list')->assertDontSee('+workspace version');
+    $this->get('/changes?snapshot=1')->assertOk()->assertSee('+new repository');
+});
+
+it('expires workspace snapshots and isolates them by folder', function (): void {
+    $this->get('/')->assertOk();
+    file_put_contents($this->repo.'/later.txt', 'appeared later');
+    $this->get('/changes?snapshot=1')->assertSee('All repositories are clean.');
+    $this->travel(6)->minutes();
+    $this->get('/changes?snapshot=1')->assertSee('+appeared later');
+
+    $other = $this->root.'/another';
+    Process::run(['git', 'init', $other])->throw();
+    Storage::disk('local')->put('workspace.path', $other);
+    $this->get('/changes?snapshot=1')->assertOk()->assertSee('All repositories are clean.')->assertDontSee('later.txt');
+});

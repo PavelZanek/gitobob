@@ -2,6 +2,8 @@
 
 namespace App\Git;
 
+use Illuminate\Support\Facades\Cache;
+
 /**
  * Discover working trees independently of the parent repository's ignore rules.
  */
@@ -29,6 +31,22 @@ final class RepositoryScanner
         }
 
         return file_exists($directory.'/.git') ? $directory : null;
+    }
+
+    public function workspaceTree(string $root, bool $reuse): ?RepositoryFolder
+    {
+        $key = 'workspace-tree-v1:'.hash('sha256', $root);
+        if ($reuse) {
+            $snapshot = Cache::get($key);
+            if (is_array($snapshot)) {
+                return $snapshot['tree'];
+            }
+        }
+
+        $tree = $this->scan($root);
+        Cache::put($key, ['tree' => $tree], now()->addMinutes(5));
+
+        return $tree;
     }
 
     public function scan(string $directory): ?RepositoryFolder

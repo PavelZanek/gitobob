@@ -32,9 +32,28 @@ final class RepositoryController
             return to_route('workspace');
         }
 
-        $repositories = $scanner->scan($root)?->changedRepositories() ?? [];
+        $reuse = $request->boolean('snapshot');
+        $repositories = $scanner->workspaceTree($root, $reuse)?->changedRepositories() ?? [];
         $relative = $request->query('repo', (string) array_key_first($repositories));
         abort_unless(is_string($relative), 404);
+
+        if ($reuse) {
+            // The sidebar can reuse the scan, but a patch must reflect the current index and worktree.
+            while (isset($repositories[$relative])) {
+                $directory = $scanner->repositoryDirectory($root, $relative);
+                $status = $directory === null ? null : RepositoryStatus::read($directory);
+                if ($status !== null && $status->changedFiles > 0) {
+                    $repositories[$relative] = $status;
+                    break;
+                }
+
+                unset($repositories[$relative]);
+                if ($request->has('repo')) {
+                    break;
+                }
+                $relative = (string) array_key_first($repositories);
+            }
+        }
 
         return $this->review($request, $scanner, $diff, $root, $repositories, $relative);
     }

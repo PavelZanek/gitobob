@@ -3,13 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script defer src="{{ asset('review.js') }}"></script>
+    <script type="module" src="{{ asset('navigation.js') }}"></script>
     <title>{{ $name }} · GitoBob</title>
     <link rel="stylesheet" href="{{ asset('workspace.css') }}">
 </head>
 <body class="review-page">
-    <header><strong>GitoBob</strong><a href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Workspace</a></header>
+    <header><strong>GitoBob</strong><a href="{{ route('workspace', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}">Workspace</a></header>
     @php($reviewRoute = $allChanges ? 'changes' : 'repository')
+    @php($snapshot = $allChanges ? ['snapshot' => 1] : [])
     @php($query = ['repo' => $relative === '' ? null : $relative, 'changed' => $onlyChanged ?: null])
     @php($selection = $query + ['file' => $fileId, 'diff' => $showDiff ? null : 'hidden'])
     <main class="repository-review">
@@ -31,19 +32,19 @@
             <div class="toolbar">
                 @if ($allChanges)
                     <nav class="layout-picker" aria-label="Workspace view">
-                        <a href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Repositories</a>
-                        <a aria-current="page" href="{{ route('changes', $onlyChanged ? ['changed' => 1] : []) }}">All changes</a>
+                        <a href="{{ route('workspace', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}">Repositories</a>
+                        <a aria-current="page" href="{{ route('changes', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}">All changes</a>
                     </nav>
                 @else
                     <h2>Changes</h2>
                 @endif
                 <div class="review-actions">
                     @if ($total > 0)
-                        <a class="button-link" href="{{ route($reviewRoute, $query + ['file' => $selected ? $fileId : null, 'diff' => $showDiff ? 'hidden' : null]) }}">{{ $showDiff ? 'Hide diff' : 'Show diff' }}</a>
+                        <a class="button-link" href="{{ route($reviewRoute, $snapshot + $query + ['file' => $selected ? $fileId : null, 'diff' => $showDiff ? 'hidden' : null]) }}">{{ $showDiff ? 'Hide diff' : 'Show diff' }}</a>
                     @endif
                     <nav class="layout-picker" aria-label="File list layout">
                         @foreach (['all' => 'All files', 'grouped' => 'Group by status'] as $layout => $label)
-                            <a href="{{ route($reviewRoute, $selection + ['layout' => $layout]) }}"
+                            <a href="{{ route($reviewRoute, $snapshot + $selection + ['layout' => $layout]) }}"
                                @if ($grouped === ($layout === 'grouped')) aria-current="true" @endif>{{ $label }}</a>
                         @endforeach
                     </nav>
@@ -70,7 +71,7 @@
                                 <ul class="files">
                                     @foreach ($files as $id => $file)
                                         <li>
-                                            <a href="{{ route($reviewRoute, ['repo' => $repoPath, 'file' => $id, 'changed' => $onlyChanged ?: null]) }}#diff{{ $grouped ? '-'.strtolower($section) : '' }}"
+                                            <a href="{{ route($reviewRoute, $snapshot + ['repo' => $repoPath, 'file' => $id, 'changed' => $onlyChanged ?: null]) }}#diff{{ $grouped ? '-'.strtolower($section) : '' }}"
                                                @if ((string) $repoPath === $relative && $id === $fileId) aria-current="true" @endif>
                                                 <span class="file-label">
                                                     <span class="filename">{{ basename($file->path) }}</span>
@@ -105,5 +106,6 @@
             </div>
         </section>
     </main>
+    @include('loading')
 </body>
 </html>
