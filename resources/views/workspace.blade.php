@@ -29,7 +29,7 @@
                     </div>
                 </div>
                 @if ($tree)
-                    <ul class="tree">@include('folder', ['folder' => $tree])</ul>
+                    <ul class="tree">@include('folder', ['folder' => $tree, 'relative' => '.'])</ul>
                 @else
                     <p class="clean-workspace">All repositories are clean.</p>
                 @endif

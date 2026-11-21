@@ -2,14 +2,34 @@
 
 namespace App\Git;
 
-use Illuminate\Support\Facades\Process;
-
 /**
  * Discover working trees independently of the parent repository's ignore rules.
  */
 final class RepositoryScanner
 {
     private const array EXCLUDED = ['.', '..', '.git', 'vendor', 'node_modules'];
+
+    public function repositoryDirectory(string $root, string $relative): ?string
+    {
+        $directory = realpath($root);
+        if ($directory === false) {
+            return null;
+        }
+
+        if ($relative !== '.') {
+            foreach (explode('/', $relative) as $name) {
+                if ($name === '' || str_contains($name, "\0") || in_array($name, self::EXCLUDED, true) || strcasecmp($name, '.git') === 0) {
+                    return null;
+                }
+                $directory .= '/'.$name;
+                if (is_link($directory) || ! is_dir($directory)) {
+                    return null;
+                }
+            }
+        }
+
+        return file_exists($directory.'/.git') ? $directory : null;
+    }
 
     public function scan(string $directory): ?RepositoryFolder
     {
@@ -18,19 +38,7 @@ final class RepositoryScanner
             return null;
         }
 
-        $status = null;
-        if (in_array('.git', $entries, true)) {
-            // Pin the working tree so an invalid marker cannot resolve to a parent repository.
-            $result = Process::path($directory)->run([
-                'git', '--no-optional-locks', '-c', 'core.fsmonitor=false',
-                '--git-dir=.git', '--work-tree=.',
-                'status', '--porcelain=v2', '-z', '--branch', '--no-ahead-behind',
-                '--untracked-files=all', '--ignore-submodules=dirty',
-            ]);
-            if ($result->successful()) {
-                $status = RepositoryStatus::fromPorcelain($result->output());
-            }
-        }
+        $status = in_array('.git', $entries, true) ? RepositoryStatus::read($directory) : null;
 
         $children = [];
         foreach ($entries as $name) {

@@ -2,7 +2,7 @@
     @if ($folder->children)
         <details open>
             <summary>@include('folder-label')</summary>
-            <ul>@foreach ($folder->children as $child) @include('folder', ['folder' => $child]) @endforeach</ul>
+            <ul>@foreach ($folder->children as $child) @include('folder', ['folder' => $child, 'relative' => $relative === '.' ? $child->name : $relative.'/'.$child->name]) @endforeach</ul>
         </details>
     @else
         <div class="leaf">@include('folder-label')</div>
