@@ -179,3 +179,38 @@ it('only opens the comparison associated with this repository and the successful
     $this->post($open, ['key' => 'different'])->assertNotFound();
     $this->post($open, ['key' => 'selected'])->assertNoContent();
 });
+
+it('amends the unpublished tip with the reviewed staged additions and keeps the working copy', function (): void {
+    $this->get('/repository?repo=demo')->assertSee('Push 1 commit')->assertSee('Amend last commit');
+    file_put_contents($this->repo.'/notes.md', "staged\n");
+    ($this->git)(['add', 'notes.md']);
+    file_put_contents($this->repo.'/notes.md', "still on disk\n");
+    $this->get('/repository?repo=demo')->assertSee('Commit staged changes');
+    $preview = $this->post('/repository/amend/preview?repo=demo')->assertOk()->assertSee('Review outgoing change')->assertSee('+staged')->assertDontSee('still on disk');
+    $this->post('/repository/amend?repo=demo', ['version' => $preview->viewData('version'), 'message' => 'Corrected subject'])->assertSessionHas('notice', 'Local commit amended.');
+    expect(($this->git)(['show', 'HEAD:notes.md']))->toBe('staged')
+        ->and(($this->git)(['rev-parse', 'HEAD^']))->toBe($this->base)
+        ->and(($this->git)(['log', '-1', '--format=%s']))->toBe('Corrected subject')
+        ->and(file_get_contents($this->repo.'/notes.md'))->toBe("still on disk\n");
+});
+
+it('stops an amendment if its tip was published or the index changed', function (bool $published): void {
+    $url = '/repository/amend/preview?repo=demo';
+    $version = $this->post($url)->assertOk()->viewData('version');
+    $head = ($this->git)(['rev-parse', 'HEAD']);
+    if ($published) {
+        ($this->git)(['push', 'origin', 'HEAD:review']);
+    } else {
+        file_put_contents($this->repo.'/late.md', 'unexpected');
+        ($this->git)(['add', 'late.md']);
+    }
+    $this->post('/repository/amend?repo=demo', ['version' => $version, 'message' => 'New message'])->assertRedirect()->assertSessionHas('notice');
+    expect(($this->git)(['rev-parse', 'HEAD']))->toBe($head);
+})->with([true, false]);
+
+it('links a diverged comparison to the exact tracking branch', function (): void {
+    $incoming = ($this->git)(['commit-tree', 'HEAD^{tree}', '-p', $this->base, '-m', 'Incoming']);
+    ($this->git)(['push', 'origin', $incoming.':review']);
+    ($this->git)(['fetch', 'origin']);
+    $this->get('/repository?repo=demo')->assertSee('Compare branches')->assertSee('refs%2Fremotes%2Forigin%2Freview')->assertDontSee('Amend last commit');
+});

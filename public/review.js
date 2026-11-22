@@ -161,3 +161,40 @@ export function initializeReview(onFileNavigation) {
         });
     }
 }
+
+document.addEventListener('submit', event => {
+    if (!event.target.matches('[data-amend-preview]') || event.defaultPrevented) return;
+    const button = event.target.querySelector('button');
+    button.disabled = true;
+    button.textContent = 'Verifying upstream…';
+});
+window.addEventListener('pageshow', () => {
+    const button = document.querySelector('[data-amend-preview] button:disabled');
+    if (button) {
+        button.disabled = false;
+        button.textContent = 'Amend last commit';
+    }
+});
+
+document.addEventListener('click', async event => {
+    const link = event.target.closest('[data-workflow-preview]');
+    if (!link || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    const content = link.closest('.branch-workflow').querySelector('[data-workflow-content]');
+    if (!content.hidden) {
+        content.hidden = true;
+        return;
+    }
+    content.hidden = false;
+    content.textContent = 'Loading preview…';
+    try {
+        const response = await fetch(link.href, { cache: 'no-store' });
+        const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const panels = page.querySelectorAll('main > .panel');
+        if (!response.ok || !panels.length) throw new Error();
+        content.replaceChildren(...panels);
+        content.querySelector('textarea, button')?.focus({ preventScroll: true });
+    } catch {
+        location.assign(link.href);
+    }
+});

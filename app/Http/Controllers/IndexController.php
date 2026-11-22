@@ -13,6 +13,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Process\Exceptions\ProcessFailedException;
 use Illuminate\Support\Facades\Cache;
 use Native\Desktop\Facades\Shell;
 use RuntimeException;
@@ -85,6 +86,35 @@ final class IndexController extends Controller
         $scanner->forgetWorkspace();
 
         return to_route('repository', $request->only('repo'))->with('notice', 'Local commit created.')->with('committed', $created);
+    }
+
+    public function amend(Request $request, RepositoryScanner $scanner, StagedCommit $commit, BranchPush $push, FileDiff $diff): View|RedirectResponse
+    {
+        $directory = $this->directory($request, $scanner);
+        $back = to_route('repository', $request->only('repo'));
+        $submit = $request->routeIs('repository.amend');
+        $data = $submit ? $request->validate(['version' => ['required', 'string', 'size:64'], 'message' => ['required', 'string', 'max:16000']]) : [];
+        try {
+            return Cache::lock('index:'.hash('sha256', $directory), 180)->block(5, function () use ($request, $submit, $data, $directory, $back, $commit, $push, $diff, $scanner): View|RedirectResponse {
+                $review = $commit->amendPreview($directory, $push, ! $submit);
+                if (! $submit) {
+                    return view('commit', $review + ['amend' => true, 'relative' => $request->query('repo'), 'name' => basename($directory),
+                        'patch' => $review['summary'] === '' ? '' : $diff->staged($directory)]);
+                }
+                if (! hash_equals($review['version'], $data['version'])) {
+                    return $back->with('notice', 'The branch, upstream or staged changes changed. Review the amendment again.');
+                }
+                $created = $commit->create($directory, $review['indexVersion'], $data['message'], $review['head']);
+                if ($created === null) {
+                    return $back->with('notice', 'The staged snapshot changed. Review the amendment again.');
+                }
+                $scanner->forgetWorkspace();
+
+                return $back->with('notice', 'Local commit amended.')->with('committed', $created);
+            });
+        } catch (RuntimeException $exception) {
+            return $back->with('notice', $exception instanceof ProcessFailedException ? 'Git could not amend the commit. Check signing and hooks.' : $exception->getMessage());
+        }
     }
 
     public function pushPreview(Request $request, RepositoryScanner $scanner, BranchPush $push, RevisionDiff $diff): View|RedirectResponse
@@ -161,6 +191,11 @@ final class IndexController extends Controller
                 'push' => $push->send($directory, $data['version']),
                 default => abort(404),
             });
+        if ($request->boolean('workflow') && (str_starts_with($notice, 'Pushed ') || str_starts_with($notice, 'Fast-forwarded ') || str_starts_with($notice, 'Fetched ') || $notice === 'Up to date')) {
+            $scanner->forgetWorkspace();
+
+            return to_route('repository', $request->only('repo'))->with('notice', $notice);
+        }
         if ($operation === 'pull') {
             $scanner->forgetWorkspace();
         }

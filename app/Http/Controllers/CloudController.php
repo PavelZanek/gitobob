@@ -71,6 +71,7 @@ final class CloudController
     {
         $repository = $this->repository($request);
         abort_if($repository === null, 404);
+        $request->validate(['thread' => ['nullable', 'string', 'max:256']]);
         $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT);
         $size = GitHubClient::FILES_PER_PAGE;
         abort_unless(is_int($page) && $page >= 1 && $page <= ceil(GitHubClient::MAX_PR_FILES / $size), 404);
@@ -255,6 +256,55 @@ final class CloudController
 
             return response()->json(['error' => $exception->getMessage()], 503);
         }
+    }
+
+    public function threads(Request $request, GitHubClient $github, int $number): JsonResponse
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $data = $request->validate(['head' => ['required', 'string'], 'base' => ['required', 'string'], 'path' => ['nullable', 'string', 'max:4096'], 'thread' => ['nullable', 'string', 'max:256']]);
+        try {
+            $comments = [];
+            $paths = isset($data['path']) ? [$data['path']] : [];
+            $threads = $github->threads($repository, $number, $data['head'], $data['base']);
+            foreach ($threads as &$thread) {
+                $thread['url'] = route('cloud.pull', ['number' => $number, 'repository' => $repository, 'locate' => 1, 'file' => hash('sha256', $thread['path']), 'thread' => $thread['id']]);
+                if ($thread['id'] === ($data['thread'] ?? null)) {
+                    $paths[] = $thread['path'];
+                }
+            }
+            foreach (array_unique($paths) as $path) {
+                if (in_array($path, array_column($threads, 'path'), true)) {
+                    array_push($comments, ...$github->lineComments($repository, $number, $path, includeFileComments: true));
+                }
+            }
+
+            return response()->json(compact('threads', 'comments'))->header('Cache-Control', 'no-store');
+        } catch (RuntimeException $exception) {
+            return response()->json(['error' => $exception->getMessage()], $exception->getCode() === 409 ? 409 : 503);
+        }
+    }
+
+    public function threadAction(Request $request, GitHubClient $github, int $number): RedirectResponse
+    {
+        $repository = $this->repository($request);
+        abort_if($repository === null, 404);
+        $data = $request->validate(['thread' => ['required', 'string', 'max:256'], 'operation' => ['required', 'in:reply,resolve'],
+            'body' => ['required_if:operation,reply', 'nullable', 'string', 'max:65536'], 'submission' => ['required', 'uuid']]);
+        $target = ['repository' => $repository, 'number' => $number, 'thread' => $data['thread']];
+        try {
+            $pull = $this->currentPull($request, $github, $repository, $number);
+            if (! Cache::add('review-thread:'.$request->input('scope').':'.$data['submission'], true, now()->addDay())) {
+                throw new RuntimeException('This submission was already received. Check the conversation before trying again.');
+            }
+            $path = $github->updateThread($pull, $data['thread'], $data['operation'] === 'reply' ? $data['body'] : null);
+        } catch (RuntimeException $exception) {
+            return to_route('cloud.pull', $target + $request->only('file', 'locate'))->with('notice', $exception->getMessage())
+                ->withInput($request->only('body', 'thread', 'scope'));
+        }
+
+        return to_route('cloud.pull', $target + ['file' => hash('sha256', $path), 'locate' => 1])
+            ->with('notice', $data['operation'] === 'reply' ? 'Reply posted to GitHub.' : 'Conversation resolved.');
     }
 
     public function ready(Request $request, GitHubClient $github, int $number): RedirectResponse

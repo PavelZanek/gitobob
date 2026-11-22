@@ -20,7 +20,7 @@ final class RepositoryController
         abort_unless(is_string($root) && is_string($relative), 404);
         $directory = $scanner->repositoryDirectory($root, $relative);
         abort_if($directory === null, 404);
-        $status = RepositoryStatus::read($directory);
+        $status = RepositoryStatus::read($directory, tracking: true);
         abort_if($status === null, 404);
 
         return $this->review($request, $scanner, $diff, $root, [$relative => $status], $relative);

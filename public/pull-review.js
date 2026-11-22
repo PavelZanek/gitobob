@@ -11,33 +11,75 @@ async function loadSummary(panel) {
     }
 }
 
-async function loadComments(pane) {
-    const status = pane.querySelector('[data-line-status]');
+function threadForm(nav, thread, operation) {
+    const form = nav.querySelector('[data-thread-form]').content.firstElementChild.cloneNode(true);
+    form.elements.thread.value = thread.id;
+    form.elements.submission.value = crypto.randomUUID();
+    form.elements.operation.value = operation;
+    form.querySelector('button').textContent = operation === 'resolve' ? 'Resolve conversation' : 'Post reply';
+    if (operation === 'resolve') return form;
+    const field = document.createElement('textarea');
+    field.name = 'body';
+    field.required = true;
+    field.maxLength = 65536;
+    field.rows = 2;
+    field.setAttribute('aria-label', 'Reply to conversation');
+    form.prepend(field);
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Reply';
+    details.append(summary, form);
+    return details;
+}
+
+async function loadThreads(nav) {
+    const status = nav.querySelector('[data-thread-count]');
     try {
-        const response = await fetch(pane.dataset.commentsUrl, { cache: 'no-store' });
-        if (!response.ok) throw new Error(response.status === 409 ? 'The diff changed. Refresh to see current comments.' : 'Line comments unavailable. Refresh to retry.');
-        const comments = await response.json();
-        const replies = new Map();
-        for (const comment of comments) {
-            if (!comment.parent) continue;
-            if (!replies.has(comment.parent)) replies.set(comment.parent, []);
-            replies.get(comment.parent).push(comment);
+        const response = await fetch(nav.dataset.url, { cache: 'no-store' });
+        if (!response.ok) throw new Error(response.status === 409 ? 'The diff changed. Refresh to see conversations.' : 'Conversations unavailable. Refresh to retry.');
+        const { threads, comments } = await response.json();
+        if (!nav.isConnected) return;
+        const open = threads.filter(thread => !thread.isResolved);
+        status.textContent = open.length + ' unresolved ' + (open.length === 1 ? 'conversation' : 'conversations');
+        const active = nav.dataset.thread;
+        const next = nav.querySelector('[data-next-thread]');
+        if (open.length) {
+            const current = threads.findIndex(thread => thread.id === active);
+            const target = threads.slice(current + 1).find(thread => !thread.isResolved) ?? open[0];
+            next.href = target.url;
+            next.hidden = false;
         }
-        for (const root of comments) {
-            if (root.parent || !Number.isInteger(root.line)) continue;
-            const attr = root.side === 'LEFT' ? 'old' : 'new';
-            const row = pane.querySelector(`.patch-row[data-${attr}="${root.line}"]`);
-            if (!row) continue;
-            const thread = document.createElement('section');
-            thread.className = 'line-thread';
-            for (const entry of [root, ...(replies.get(root.id) ?? [])]) {
+        for (const thread of threads) {
+            if (thread.path !== nav.dataset.file && thread.id !== active) continue;
+            const root = thread.comments.nodes[0];
+            if (!root) continue;
+            const row = !thread.isOutdated && thread.path === nav.dataset.file && Number.isInteger(thread.line)
+                ? document.querySelector(`.patch-row[data-${thread.diffSide === 'LEFT' ? 'old' : 'new'}="${thread.line}"]`) : null;
+            const card = document.createElement('section');
+            card.className = 'line-thread';
+            const heading = document.createElement('strong');
+            heading.className = 'thread-state';
+            heading.textContent = [thread.isResolved ? 'Resolved' : 'Open conversation', row ? null : thread.path, thread.isOutdated ? 'Outdated' : null].filter(Boolean).join(' · ');
+            card.append(heading);
+            for (const entry of [{ author: root.author?.login, body: root.body }, ...comments.filter(c => c.parent === root.databaseId)]) {
                 const author = document.createElement('strong');
                 author.textContent = entry.author ?? 'Deleted account';
                 const body = document.createElement('p');
                 body.textContent = entry.body;
-                thread.append(author, body);
+                card.append(author, body);
             }
-            row.after(thread);
+            const actions = document.createElement('div');
+            actions.className = 'thread-actions';
+            if (thread.viewerCanReply) actions.append(threadForm(nav, thread, 'reply'));
+            if (!thread.isResolved && thread.viewerCanResolve) actions.append(threadForm(nav, thread, 'resolve'));
+            card.append(actions);
+            if (row) row.after(card);
+            else nav.querySelector('[data-detached-threads]').append(card);
+            if (thread.id === active) {
+                card.tabIndex = -1;
+                card.focus({ preventScroll: true });
+                card.scrollIntoView({ block: 'center' });
+            }
         }
     } catch (error) {
         status.textContent = error.message;
@@ -83,10 +125,11 @@ function enableLineEditor(pane) {
 export function initializePullReview() {
     const panel = document.querySelector('[data-review-summary]');
     if (panel) loadSummary(panel);
+    const nav = document.querySelector('[data-threads]');
+    if (nav) loadThreads(nav);
     const pane = document.querySelector('[data-line-review]');
     if (pane) {
         enableLineEditor(pane);
-        loadComments(pane);
     }
 }
 

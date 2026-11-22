@@ -33,6 +33,8 @@ Route::post('/repository/stashes/apply', [StashController::class, 'change'])->de
 Route::post('/repository/publish', [IndexController::class, 'publish'])->name('repository.publish');
 Route::post('/repository/publish/open', [IndexController::class, 'openComparison'])->name('repository.publish.open');
 Route::post('/repository/index', [IndexController::class, 'change'])->name('repository.index');
+Route::post('/repository/amend/preview', [IndexController::class, 'amend'])->name('repository.amend.preview');
+Route::post('/repository/amend', [IndexController::class, 'amend'])->name('repository.amend');
 Route::get('/repository/commit', [IndexController::class, 'preview'])->name('repository.commit.preview');
 Route::post('/repository/commit', [IndexController::class, 'commit'])->name('repository.commit');
 Route::get('/repository/push', [IndexController::class, 'pushPreview'])->name('repository.push.preview');
@@ -50,6 +52,8 @@ Route::post('/cloud/pulls/{number}/viewed', [CloudController::class, 'viewed'])-
 Route::post('/cloud/pulls/{number}/comments', [CloudController::class, 'comment'])->where('number', '[1-9][0-9]{0,9}')->name('cloud.pull.comment');
 
 Route::prefix('/cloud/pulls/{number}')->where(['number' => '[1-9][0-9]{0,9}'])->name('cloud.pull.')->group(function (): void {
+    Route::get('/threads', [CloudController::class, 'threads'])->name('threads');
+    Route::post('/threads', [CloudController::class, 'threadAction'])->name('threads.action');
     Route::get('/summary', [CloudController::class, 'summary'])->name('summary');
     Route::post('/ready', [CloudController::class, 'ready'])->name('ready');
     Route::get('/lines', [CloudController::class, 'lines'])->name('lines');

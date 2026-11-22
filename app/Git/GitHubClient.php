@@ -206,10 +206,70 @@ final class GitHubClient
     }
 
     /** @return list<array<string, mixed>> */
-    public function lineComments(string $repository, int $number, string $path): array
+    public function lineComments(string $repository, int $number, string $path, bool $includeFileComments = false): array
     {
+        $filter = $includeFileComments ? '' : ' and .subject_type != "file"';
+
         return $this->read('repos/'.$repository.'/pulls/'.$number.'/comments?per_page=100',
-            'map(select(.path == '.json_encode($path, JSON_THROW_ON_ERROR).' and .subject_type != "file") | {id, parent:.in_reply_to_id, line, side, author:.user.login, body})');
+            'map(select(.path == '.json_encode($path, JSON_THROW_ON_ERROR).$filter.') | {id, parent:.in_reply_to_id, line, side, author:.user.login, body})');
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function threads(string $repository, int $number, string $head, string $base): array
+    {
+        [$owner, $name] = explode('/', $repository, 2);
+        $query = <<<'GRAPHQL'
+        query($owner:String!, $name:String!, $number:Int!, $after:String) {
+          repository(owner:$owner,name:$name) { pullRequest(number:$number) {
+            headRefOid baseRefOid reviewThreads(first:100,after:$after) {
+              pageInfo { hasNextPage endCursor }
+              nodes { id path line diffSide isResolved isOutdated viewerCanReply viewerCanResolve
+                comments(first:1) { nodes { databaseId body author { login } } }
+              }
+            }
+          } }
+        }
+        GRAPHQL;
+        $threads = [];
+        $after = null;
+        do {
+            $result = $this->request('graphql', ['query' => $query, 'variables' => compact('owner', 'name', 'number', 'after')]);
+            $pull = $result['data']['repository']['pullRequest'] ?? [];
+            if (($pull['headRefOid'] ?? null) !== $head || ($pull['baseRefOid'] ?? null) !== $base) {
+                throw new RuntimeException('The diff changed. Refresh to see current conversations.', 409);
+            }
+            $page = $pull['reviewThreads'];
+            array_push($threads, ...$page['nodes']);
+            $after = $page['pageInfo']['hasNextPage'] ? $page['pageInfo']['endCursor'] : null;
+        } while ($after !== null);
+
+        return $threads;
+    }
+
+    /** @param array<string, mixed> $pull */
+    public function updateThread(array $pull, string $id, ?string $body): string
+    {
+        $response = $this->request('graphql', ['query' => 'query($id:ID!) { node(id:$id) { ... on PullRequestReviewThread {
+            path isResolved viewerCanReply viewerCanResolve pullRequest { id headRefOid baseRefOid } } } }', 'variables' => ['id' => $id]]);
+        $thread = $response['data']['node'] ?? [];
+        $parent = $thread['pullRequest'] ?? [];
+        if (($parent['id'] ?? null) !== $pull['node_id'] || $parent['headRefOid'] !== $pull['head_sha'] || $parent['baseRefOid'] !== $pull['base_sha']) {
+            throw new RuntimeException('This conversation does not belong to the displayed pull request revision.');
+        }
+        if ($body === null && $thread['isResolved']) {
+            return $thread['path'];
+        }
+        if (! $thread[$body === null ? 'viewerCanResolve' : 'viewerCanReply']) {
+            throw new RuntimeException('This GitHub account cannot update this conversation.');
+        }
+        $result = $body === null
+            ? $this->request('graphql', ['query' => 'mutation($id:ID!) { resolveReviewThread(input:{threadId:$id}) { thread { isResolved } } }', 'variables' => compact('id')])
+            : $this->request('graphql', ['query' => 'mutation($id:ID!, $body:String!) { addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id,body:$body}) { comment { id } } }', 'variables' => compact('id', 'body')]);
+        if (empty($result['data']['resolveReviewThread']['thread']['isResolved']) && empty($result['data']['addPullRequestReviewThreadReply']['comment']['id'])) {
+            throw new RuntimeException('GitHub did not confirm the update. Refresh the conversation.');
+        }
+
+        return $thread['path'];
     }
 
     public function postLineComment(string $repository, int $number, string $commit, string $path, int $line, string $side, string $body): void

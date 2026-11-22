@@ -33,9 +33,9 @@
         @if (session('notice'))<p class="action-notice branch-message" role="status">{{ session('notice') }}
             @if (session('committed'))<a href="{{ route('repository.history', $query + ['commit' => session('committed')]) }}">View commit</a> · <a href="{{ route('repository.push.preview', $query) }}">Sync…</a>@endif
         </p>@endif
-        @if (! $allChanges && ($remaining = count($repositories[$relative]->conflicts())))
-            <p class="action-notice"><a href="{{ route('repository.conflicts', $query) }}">{{ $remaining }} conflicted {{ Str::plural('file', $remaining) }} · Review conflicts</a></p>
-        @endif
+        @unless ($allChanges)
+            @include('branch-workflow', ['status' => $repositories[$relative]])
+        @endunless
         <section class="panel" aria-label="Changed files">
             <div class="toolbar">
                 @if ($allChanges)
@@ -53,7 +53,7 @@
                     @if (! $allChanges && ! session('committed'))
                         <a class="button-link" href="{{ route('repository.push.preview', $query) }}">Sync…</a>
                     @endif
-                    @if (isset($repositories[$relative]) && collect($repositories[$relative]->files)->contains(fn ($file) => isset($file->sections['Staged'])))
+                    @if ($allChanges && isset($repositories[$relative]) && collect($repositories[$relative]->files)->contains(fn ($file) => isset($file->sections['Staged'])))
                         <a class="button-link" href="{{ route('repository.commit.preview', ['repo' => $relative]) }}">Commit staged…@if ($allChanges) · {{ $relative === '.' ? $rootName : $relative }}@endif</a>
                     @endif
                     @if ($total > 0)

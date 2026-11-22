@@ -10,7 +10,7 @@
 <body class="review-page">
 <header><strong>GitoBob</strong><a href="{{ route('repository', ['repo' => $relative]) }}">{{ $name }}</a><a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
 <main class="repository-review">
-    @php($return = request()->only('comparison', 'file_back', 'tab', 'page'))
+    @php($return = request()->only('workflow', 'comparison', 'file_back', 'tab', 'page'))
     @php($comparison = ['repo' => $relative, 'review' => $version] + $return)
     <section class="heading">
         <div><h1>{{ $commit ? 'Commit details' : 'Branch sync' }}</h1><p class="repository-meta">{{ $name }} · {{ $branch }}</p></div>

@@ -325,3 +325,56 @@ it('reports failed checks, requested changes and line replies only against the d
     $this->getJson($lines.'&head=tip')->assertExactJson($comments);
     $this->getJson($lines.'&head=previous')->assertConflict();
 });
+
+it('checks thread ownership and permission before resolving or replying to a review', function (): void {
+    $node = 'PR_other';
+    $canReply = false;
+    $writes = [];
+    Process::fake(function (PendingProcess $process) use (&$node, &$canReply, &$writes) {
+        if ($process->command[1] === 'config') {
+            return Process::result('reviewer');
+        }
+        if (in_array('GET', $process->command, true)) {
+            return Process::result(json_encode([['node_id' => 'PR_test', 'state' => 'open', 'head_sha' => 'tip', 'base_sha' => 'base']]));
+        }
+        $payload = json_decode($process->input, true);
+        if (str_starts_with($payload['query'], 'query')) {
+            return Process::result(json_encode(['data' => ['node' => ['path' => 'a.txt', 'isResolved' => false, 'viewerCanResolve' => true, 'viewerCanReply' => $canReply,
+                'pullRequest' => ['id' => $node, 'headRefOid' => 'tip', 'baseRefOid' => 'base']]]]));
+        }
+        $writes[] = $payload['variables'];
+
+        return Process::result(json_encode(['data' => ['addPullRequestReviewThreadReply' => ['comment' => ['id' => 'C']], 'resolveReviewThread' => ['thread' => ['isResolved' => true]]]]));
+    });
+    $scope = hash('sha256', (new GitHubClient)->reviewKey('example/demo', 4));
+    $url = '/cloud/pulls/4/threads?repository=example/demo';
+    $reply = ['scope' => $scope, 'head' => 'tip', 'base' => 'base', 'thread' => 'T', 'operation' => 'reply', 'body' => 'Reply'];
+    $this->post($url, ['submission' => (string) Str::uuid()] + $reply)->assertSessionHasInput('body', 'Reply');
+    $node = 'PR_test';
+    $this->post($url, ['submission' => (string) Str::uuid()] + $reply)->assertSessionHas('notice', 'This GitHub account cannot update this conversation.');
+    expect($writes)->toBeEmpty();
+    $canReply = true;
+    $payload = ['submission' => (string) Str::uuid()] + $reply;
+    $this->post($url, $payload)->assertSessionHas('notice', 'Reply posted to GitHub.');
+    $this->post($url, $payload)->assertRedirect();
+    $this->post($url, ['operation' => 'resolve', 'submission' => (string) Str::uuid()] + $reply)->assertSessionHas('notice', 'Conversation resolved.');
+    expect($writes)->toBe([['id' => 'T', 'body' => 'Reply'], ['id' => 'T']]);
+});
+
+it('indexes unresolved conversations across pages and files for the displayed revision', function (): void {
+    Process::fake(function (PendingProcess $process) {
+        if (! in_array('graphql', $process->command, true)) {
+            return Process::result('[]');
+        }
+        $variables = json_decode($process->input, true)['variables'];
+        $first = $variables['after'] === null;
+        $threads = ['nodes' => [['id' => $first ? 'A' : 'B', 'path' => $first ? 'a.txt' : 'b.txt', 'isResolved' => ! $first]],
+            'pageInfo' => ['hasNextPage' => $first, 'endCursor' => $first ? 'next' : null]];
+
+        return Process::result(json_encode(['data' => ['repository' => ['pullRequest' => ['headRefOid' => 'tip', 'baseRefOid' => 'base', 'reviewThreads' => $threads]]]]));
+    });
+    $url = '/cloud/pulls/4/threads?repository=example/demo&path=a.txt&base=base';
+    $this->getJson($url.'&head=tip')->assertOk()->assertJsonCount(2, 'threads')
+        ->assertJsonPath('threads.1.url', route('cloud.pull', ['number' => 4, 'repository' => 'example/demo', 'locate' => 1, 'file' => hash('sha256', 'b.txt'), 'thread' => 'B']));
+    $this->getJson($url.'&head=older')->assertConflict();
+});

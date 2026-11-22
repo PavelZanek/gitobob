@@ -42,6 +42,24 @@
                 <summary><strong>Checks &amp; reviews</strong> <span data-summary-label role="status">Loading…</span></summary>
                 <div data-summary-details></div>
             </details>
+            <section class="thread-navigation" aria-label="Review conversations" data-threads
+                data-url="{{ route('cloud.pull.threads', $base + ['head' => $detail['pull']['head_sha'] ?? '', 'base' => $detail['pull']['base_sha'] ?? '', 'path' => $selected['filename'] ?? null, 'thread' => request()->query('thread')]) }}"
+                data-file="{{ $selected['filename'] ?? '' }}" data-thread="{{ request()->query('thread') }}">
+                <span data-thread-count role="status">Loading conversations…</span>
+                <a class="button-link" data-next-thread hidden>Next unresolved</a>
+                <div data-detached-threads></div>
+                <template data-thread-form>
+                    <form class="write-form" method="post" data-review-write action="{{ route('cloud.pull.threads.action', $base + ['file' => $selected['id'] ?? null, 'locate' => 1]) }}">
+                        @csrf
+                        @include('pull-revision')
+                        <input type="hidden" name="thread"><input type="hidden" name="submission"><input type="hidden" name="operation">
+                        <button type="submit"></button>
+                    </form>
+                </template>
+                @if (old('thread') && old('body') && old('scope') === hash('sha256', $scope))
+                    <details open><summary>Unsent reply</summary><p>{{ old('body') }}</p></details>
+                @endif
+            </section>
             <details class="panel comment-box" data-comment-draft="{{ hash('sha256', $scope) }}" @if(session('posted') === hash('sha256', $scope)) data-posted @endif @if(old('comment') || $errors->has('comment')) open @endif>
                 <summary>Comment on pull request</summary>
                 <form class="write-form" method="post" action="{{ route('cloud.pull.comment', $query + ['file' => $selected['id'] ?? null, 'page' => $page]) }}">
@@ -122,7 +140,7 @@
                                     </form>
                                 </div>
                                 @if ($selected['patch'] !== '')
-                                    <div data-line-review data-comments-url="{{ route('cloud.pull.lines', $base + ['path' => $selected['filename'], 'head' => $detail['pull']['head_sha'] ?? '', 'base' => $detail['pull']['base_sha'] ?? '']) }}">
+                                    <div data-line-review>
                                         <p class="line-status" data-line-status role="status"></p>
                                         @include('patch', ['patch' => $selected['patch'], 'section' => 'Pull request', 'inlineReview' => true])
                                         <template data-line-template>

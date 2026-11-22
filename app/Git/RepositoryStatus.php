@@ -9,7 +9,7 @@ final readonly class RepositoryStatus
     public int $changedFiles;
 
     /** @param array<string, ChangedFile> $files */
-    private function __construct(public string $branch, public array $files)
+    private function __construct(public string $branch, public array $files, public string $upstream, public ?int $ahead, public ?int $behind, public string $upstreamRef, public string $remoteTarget)
     {
         $this->changedFiles = count($files);
     }
@@ -37,20 +37,32 @@ final readonly class RepositoryStatus
         return array_filter($this->files, static fn (ChangedFile $file): bool => ($file->sections['Unstaged'] ?? null) === 'U');
     }
 
-    public static function read(string $directory): ?self
+    public static function read(string $directory, bool $tracking = false): ?self
     {
         $result = Process::path($directory)->run([
             'git', '--no-optional-locks', '-c', 'core.fsmonitor=false', '--git-dir=.git', '--work-tree=.',
-            'status', '--porcelain=v2', '-z', '--branch', '--no-ahead-behind',
+            'status', '--porcelain=v2', '-z', '--branch', $tracking ? '--ahead-behind' : '--no-ahead-behind',
             '--untracked-files=all', '--ignore-submodules=dirty',
         ]);
 
-        return $result->successful() ? self::fromPorcelain($result->output()) : null;
+        if (! $result->successful()) {
+            return null;
+        }
+        $output = $result->output();
+        $ref = $target = '';
+        if ($tracking && preg_match('/(?:^|\x00)# branch.head ([^\x00]+)\x00/', $output, $match) && str_contains($output, '# branch.upstream ')) {
+            $upstream = Process::path($directory)->run(['git', 'for-each-ref', '--count=1', '--format=%(upstream)%09%(upstream:remoteref)', '--', 'refs/heads/'.$match[1]]);
+            [$ref, $target] = array_pad(explode("\t", rtrim($upstream->output(), "\n"), 2), 2, '');
+        }
+
+        return self::fromPorcelain($output, $ref, $target);
     }
 
-    public static function fromPorcelain(string $output): self
+    public static function fromPorcelain(string $output, string $ref = '', string $target = ''): self
     {
         $branch = 'Detached HEAD';
+        $upstream = '';
+        $ahead = $behind = null;
         $files = [];
         $records = explode("\0", $output);
         $length = count($records);
@@ -64,6 +76,12 @@ final readonly class RepositoryStatus
                 continue;
             }
 
+            if (str_starts_with($record, '# branch.upstream ')) {
+                $upstream = substr($record, 18);
+            } elseif (preg_match('/^# branch\.ab \+(\d+) -(\d+)$/D', $record, $counts)) {
+                $ahead = (int) $counts[1];
+                $behind = (int) $counts[2];
+            }
             $type = $record[0] ?? '';
             $fields = match ($type) {
                 '1' => 9, '2' => 10, 'u' => 11, '?' => 2, default => null,
@@ -103,6 +121,6 @@ final readonly class RepositoryStatus
 
         uasort($files, static fn (ChangedFile $a, ChangedFile $b): int => strcmp($a->path, $b->path));
 
-        return new self($branch, $files);
+        return new self($branch, $files, $upstream, $ahead, $behind, $ref, $target);
     }
 }
