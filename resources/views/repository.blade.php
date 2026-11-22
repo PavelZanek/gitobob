@@ -8,7 +8,9 @@
     <link rel="stylesheet" href="{{ asset('workspace.css') }}">
 </head>
 <body class="review-page">
-    <header><strong>GitoBob</strong><a href="{{ route('workspace', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}">Workspace</a>@include('modes', ['local' => $allChanges ? null : $relative])<a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
+    <header><strong>GitoBob</strong><a href="{{ route('workspace', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}">Workspace</a>@include('modes', ['local' => $allChanges ? null : $relative])
+        @include('fetch-results-link')
+        <a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
     @php($reviewRoute = $allChanges ? 'changes' : 'repository')
     @php($snapshot = $allChanges ? ['snapshot' => 1] : [])
     @php($query = ['repo' => $relative === '' ? null : $relative, 'changed' => $onlyChanged ?: null])

@@ -9,17 +9,20 @@
 </head>
 <body class="review-page">
 @php
-    $query = ['repo' => $relative, 'base' => $base, 'head' => $head, 'comparison' => $snapshot];
+    $query = ['repo' => $relative, 'base' => $base, 'head' => $head, 'comparison' => $snapshot] + request()->only('from');
     $selection = ['file' => $file ?: null, 'page' => $page];
     $withAction = $pair && $pair['ancestor'] !== '' && $pair['ancestor'] !== $pair['head']['oid'];
 @endphp
-<header><strong>GitoBob</strong><a href="{{ route('repository', ['repo' => $relative]) }}">{{ $name }}</a><a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
+<header><strong>GitoBob</strong><a href="{{ route('repository', ['repo' => $relative]) }}">{{ $name }}</a>
+        @include('fetch-results-link')
+        <a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
 <main class="repository-review" @if ($withAction) data-cloud-url="{{ route('repository.compare.action', $query + $selection + ['tab' => $tab]) }}" @endif>
     <section class="heading"><div><h1>Compare branches</h1><p class="repository-meta">{{ $name }}</p></div></section>
     @if (session('notice'))<p class="action-notice" role="status">{{ session('notice') }}</p>@endif
     <section class="panel">
         <form class="toolbar publish-remote compare-picker" method="get" action="{{ route('repository.compare') }}">
             <input type="hidden" name="repo" value="{{ $relative }}">
+            @if (request()->query('from') === 'workspace-fetch')<input type="hidden" name="from" value="workspace-fetch">@endif
             @foreach (['head' => 'Source branch', 'base' => 'Base branch'] as $key => $label)
                 <label for="{{ $key }}">{{ $label }}</label>
                 <select id="{{ $key }}" name="{{ $key }}" required>

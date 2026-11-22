@@ -8,7 +8,9 @@
     <title>Branch sync · {{ $name }} · GitoBob</title>
 </head>
 <body class="review-page">
-<header><strong>GitoBob</strong><a href="{{ route('repository', ['repo' => $relative]) }}">{{ $name }}</a><a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
+<header><strong>GitoBob</strong><a href="{{ route('repository', ['repo' => $relative]) }}">{{ $name }}</a>
+        @include('fetch-results-link')
+        <a class="settings-link" href="{{ route('settings') }}">Settings</a></header>
 <main class="repository-review">
     @php($return = request()->only('workflow', 'comparison', 'file_back', 'tab', 'page'))
     @php($comparison = ['repo' => $relative, 'review' => $version] + $return)

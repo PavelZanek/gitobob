@@ -1,4 +1,4 @@
-import './workspace-fetch.js';
+import { initializeWorkspaceFetch } from './workspace-fetch.js';
 import { initializeProjectPicker } from './project-picker.js';
 import { enableFocusRefresh } from './focus-refresh.js';
 import { initializeCloud } from './cloud.js';
@@ -144,6 +144,7 @@ function scheduleNeighbor() {
 function initializePageReview() {
     initializeReview(scheduleNeighbor);
     initializeProjectPicker();
+    initializeWorkspaceFetch();
 }
 
 document.addEventListener('pointerover', prefetch);

@@ -13,13 +13,13 @@
     <section class="heading"><div><h1>Fetch repositories</h1><p class="repository-meta">{{ $name }} · Fetch the tracked branch in each selected project.</p></div></section>
     <form class="panel" data-workspace-fetch data-workspace="{{ $workspace }}" method="post">
         @csrf
-        <div class="toolbar"><label><input type="checkbox" data-fetch-all> Select all</label><button disabled data-fetch-submit>Fetch selected</button></div>
+        <div class="toolbar"><label><input type="checkbox" data-fetch-all> Select all</label><div class="actions"><button type="submit" hidden data-fetch-retry>Retry failed</button><button type="submit" disabled data-fetch-submit>Fetch selected</button></div></div>
         <p class="cloud-row" data-fetch-progress role="status">Select the repositories to fetch.</p>
         @forelse ($repositories as $relative => $repo)
             <div class="fetch-row" data-fetch-url="{{ route('workspace.fetch.run', ['repo' => $relative]) }}">
-                <label><input type="checkbox" data-fetch-choice data-branch="{{ $repo->branch }}" data-upstream="{{ $repo->upstream ?? '' }}" @disabled(empty($repo->upstream))> <strong>{{ $relative === '.' ? $name : $relative }}</strong></label>
+                <label><input type="checkbox" data-fetch-choice value="{{ $relative }}" data-branch="{{ $repo->branch }}" data-upstream="{{ $repo->upstream ?? '' }}" @disabled(empty($repo->upstream))> <strong>{{ $relative === '.' ? $name : $relative }}</strong></label>
                 <span class="repository-meta">{{ $repo->branch }} · {{ ($repo->upstream ?? '') ?: 'No upstream' }}</span>
-                <span data-fetch-result></span>
+                <span data-fetch-result></span><time class="repository-meta" hidden></time>
             </div>
         @empty
             <p class="clean-workspace">No repositories in this workspace.</p>
