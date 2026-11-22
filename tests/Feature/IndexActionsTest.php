@@ -105,3 +105,62 @@ it('unstages both sides of a rename while keeping the new path on disk', functio
     expect(($this->git)(['diff', '--cached', '--name-only']))->toBe('')
         ->and(file_get_contents($this->repo.'/after.txt'))->toBe("text\n");
 });
+
+it('stages and unstages selected rows inside one hunk without touching the working file', function (): void {
+    $name = 'two edits.txt';
+    $file = $this->repo.'/'.$name;
+    file_put_contents($file, "start\nold A\nold B\nend");
+    ($this->git)(['add', '.']);
+    ($this->git)(['commit', '-m', 'Base']);
+    $working = "start\nnew A\nnew B\nend";
+    file_put_contents($file, $working);
+    $id = hash('sha256', $name);
+    $payload = function (string $section, array $rows) use ($id): array {
+        $page = $this->get('/repository?repo=demo&file='.$id)->assertOk();
+        $patch = $page->viewData('previews')[$section];
+        $body = explode("\n", substr($patch, strpos($patch, "\n@@ ") + 1));
+        $indices = array_keys(array_intersect($body, $rows));
+        expect($indices)->toHaveCount(count($rows));
+
+        return ['file' => $id, 'section' => $section, 'version' => $page->viewData('version'), 'patch_version' => hash('sha256', $patch),
+            'intent' => 'lines', 'lines' => implode(',', $indices)];
+    };
+    $url = '/repository/index?repo=demo';
+    $stage = $payload('Unstaged', ['-old A', '+new A']);
+    $this->post($url, ['lines' => '0'] + $stage)->assertSessionHas('notice', 'The selected lines changed. Review the current diff.');
+    $this->post($url, $stage)->assertSessionHas('notice', 'Selected lines staged.');
+    $this->post($url, $stage)->assertSessionHas('notice', 'The file changed. Review the current diff and try again.');
+    expect(($this->git)(['show', ':'.$name]))->toBe("start\nnew A\nold B\nend")->and(file_get_contents($file))->toBe($working);
+    $this->post($url, $payload('Staged', ['-old A', '+new A']))->assertSessionHas('notice', 'Selected lines unstaged.');
+    expect(($this->git)(['diff', '--cached']))->toBe('')->and(file_get_contents($file))->toBe($working);
+});
+
+it('stages just one line of a new file and preserves its mode and final newline', function (): void {
+    $name = 'script with spaces';
+    file_put_contents($this->repo.'/'.$name, "first\nsecond");
+    chmod($this->repo.'/'.$name, 0755);
+    $id = hash('sha256', $name);
+    $page = $this->get('/repository?repo=demo&file='.$id)->assertOk();
+    $patch = $page->viewData('previews')['Untracked'];
+    $this->post('/repository/index?repo=demo', ['file' => $id, 'section' => 'Untracked', 'version' => $page->viewData('version'),
+        'intent' => 'lines', 'lines' => '2', 'patch_version' => hash('sha256', $patch)])->assertSessionHas('notice', 'Selected lines staged.');
+    expect(($this->git)(['show', ':'.$name]))->toBe('second')->and(($this->git)(['ls-files', '-s']))->toStartWith('100755');
+});
+
+it('keeps the original order and positions when staging rows from separate hunks', function (): void {
+    $file = $this->repo.'/list';
+    $base = implode("\n", range(1, 40))."\n";
+    file_put_contents($file, $base);
+    ($this->git)(['add', '.']);
+    ($this->git)(['commit', '-m', 'Base']);
+    $working = str_replace(["\n2\n", "\n30\n"], ["\n2\nfirst\nextra\n", "\n30\nsecond\n"], $base);
+    file_put_contents($file, $working);
+    $id = hash('sha256', 'list');
+    $page = $this->get('/repository?repo=demo&file='.$id);
+    $patch = $page->viewData('previews')['Unstaged'];
+    $body = explode("\n", substr($patch, strpos($patch, "\n@@ ") + 1));
+    $rows = array_keys(array_intersect($body, ['+first', '+second']));
+    $this->post('/repository/index?repo=demo', ['file' => $id, 'section' => 'Unstaged', 'version' => $page->viewData('version'),
+        'intent' => 'lines', 'lines' => implode(',', $rows), 'patch_version' => hash('sha256', $patch)])->assertSessionHas('notice', 'Selected lines staged.');
+    expect(($this->git)(['show', ':list']))->toBe(str_replace("extra\n", '', $working))->and(file_get_contents($file))->toBe($working);
+});

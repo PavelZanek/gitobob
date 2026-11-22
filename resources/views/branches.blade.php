@@ -19,7 +19,7 @@
     @if ($errors->any())<p class="action-notice" role="alert">{{ $errors->first() }}</p>@endif
     <section class="panel">
         <div class="toolbar branch-tools">
-            <input type="search" data-branch-search aria-label="Search local branches" placeholder="Search branches…">
+            <input type="search" data-branch-search value="{{ request()->string('find') }}" aria-label="Search local branches" placeholder="Search branches…">
             <a class="button-link" href="#create-branch">Create branch…</a>
         </div>
         <form method="post" action="{{ route('repository.branches.change', $query) }}">
@@ -27,7 +27,7 @@
             <input type="hidden" name="operation" value="switch">
             <input type="hidden" name="version" value="{{ $version }}">
             @foreach ($branches as $branch)
-                <div class="branch-row" data-branch-name="{{ $branch }}"><span>{{ $branch }}</span>
+                <div class="branch-row" data-branch-name="{{ $branch }}" @if (request()->filled('find') && $branch !== (string) request()->string('find')) hidden @endif><span>{{ $branch }}</span>
                     @if ($branch === $current)<span class="repository-meta">Current branch</span>
                     @else<button name="branch" value="{{ $branch }}" aria-label="Switch to {{ $branch }}">Switch</button>@endif
                 </div>

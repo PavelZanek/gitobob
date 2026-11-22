@@ -51,10 +51,13 @@ final class IndexController extends Controller
             'section' => ['required', 'in:Staged,Unstaged,Untracked'],
             'version' => ['required', 'string', 'size:64'],
             'hunk' => ['sometimes', 'integer', 'min:0'],
-            'patch_version' => ['required_with:hunk', 'string', 'size:64'],
+            'intent' => ['sometimes', 'in:lines'],
+            'lines' => ['required_if:intent,lines', 'nullable', 'string', 'max:1048576', 'regex:/^\d+(?:,\d+)*$/D'],
+            'patch_version' => ['required_with:hunk,intent', 'string', 'size:64'],
         ]);
         $message = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
-            fn (): string => $index->change($directory, $data['file'], $data['section'], $data['version'], isset($data['hunk']) ? (int) $data['hunk'] : null, $data['patch_version'] ?? null));
+            fn (): string => $index->change($directory, $data['file'], $data['section'], $data['version'], isset($data['hunk']) ? (int) $data['hunk'] : null, $data['patch_version'] ?? null,
+                isset($data['intent']) ? array_map(intval(...), explode(',', $data['lines'])) : null));
         $scanner->forgetWorkspace();
 
         return to_route($request->boolean('all') ? 'changes' : 'repository', $request->only('repo', 'file', 'filter', 'changed'))->with('notice', $message);

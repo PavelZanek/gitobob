@@ -73,7 +73,7 @@ final class RepositoryController
             $slots += $files;
         }
         $ids = array_keys($slots);
-        if ($request->hasHeader('X-GitoBob-Revision') && (! is_string($fileId) || ! isset($slots[$fileId]))) {
+        if (($request->boolean('resume') || $request->hasHeader('X-GitoBob-Revision')) && (! is_string($fileId) || ! isset($slots[$fileId]))) {
             $fileId = $ids[min(max(0, $request->integer('slot')), count($ids) - 1)] ?? null;
         }
         $slot = is_string($fileId) ? array_search($fileId, $ids, true) : false;
@@ -98,7 +98,7 @@ final class RepositoryController
         $response = response()->view('repository', [
             'name' => $allChanges ? 'All changes' : (basename($relative === '.' ? $root : $relative) ?: '/'),
             'rootName' => basename($root) ?: '/', 'relative' => $relative, 'repositories' => $repositories,
-            'allChanges' => $allChanges, 'total' => array_sum(array_column($repositories, 'changedFiles')),
+            'workspaceKey' => hash('sha256', $root), 'allChanges' => $allChanges, 'total' => array_sum(array_column($repositories, 'changedFiles')),
             'grouped' => $grouped, 'groups' => $groups, 'fileId' => $fileId, 'selected' => $selected,
             'version' => $version, 'revision' => $revision, 'slot' => $slot, 'showDiff' => $showDiff, 'previews' => $previews, 'onlyChanged' => $request->boolean('changed'),
         ]);

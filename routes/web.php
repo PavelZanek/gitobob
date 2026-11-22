@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [WorkspaceController::class, 'index'])->name('workspace');
 Route::view('/settings', 'settings')->name('settings');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+Route::get('/workspace/catalog', [WorkspaceController::class, 'catalog'])->name('workspace.catalog');
+Route::get('/workspace/fetch', [WorkspaceController::class, 'fetchList'])->name('workspace.fetch');
+Route::post('/workspace/fetch', [WorkspaceController::class, 'fetchRepository'])->name('workspace.fetch.run');
 Route::post('/workspace', [WorkspaceController::class, 'choose'])->name('workspace.choose');
 
 Route::get('/repository', RepositoryController::class)->name('repository');

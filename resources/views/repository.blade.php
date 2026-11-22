@@ -14,7 +14,7 @@
     @php($query = ['repo' => $relative === '' ? null : $relative, 'changed' => $onlyChanged ?: null])
     @php($selection = $query + ['file' => $fileId, 'diff' => $showDiff ? null : 'hidden'])
     <main class="repository-review" @unless($allChanges)
-        data-refresh-url="{{ route($reviewRoute, $selection + ['slot' => $slot ?: null]) }}"
+        data-project="{{ $relative }}" data-workspace="{{ $workspaceKey }}" data-refresh-url="{{ route($reviewRoute, $selection + ['slot' => $slot ?: null]) }}"
         data-revision="{{ $revision }}" data-file="{{ $fileId }}" @endunless>
         <section class="heading">
             <div>
@@ -121,6 +121,7 @@
                                 @include('hunk-navigation')
                             </div>
                             @foreach ($previews as $section => $patch)
+                                @php($lineAction = $version && \App\Git\SelectedLines::available($patch, $selected->sections[$section]))
                                 <div id="diff-{{ strtolower($section) }}" class="section-title index-actions">
                                     <h3>{{ $section }}</h3>
                                     @if ($version)
@@ -133,6 +134,10 @@
                                             <input type="hidden" name="version" value="{{ $version }}">
                                             <input type="hidden" name="section" value="{{ $section }}">
                                             <button>{{ $section === 'Staged' ? 'Unstage file' : 'Stage file' }}</button>
+                                            @if ($lineAction)
+                                                <input type="hidden" name="lines" disabled>
+                                                <button name="intent" value="lines" data-apply-lines disabled>{{ $section === 'Staged' ? 'Unstage' : 'Stage' }} selected lines</button>
+                                            @endif
                                         </form>
                                     @endif
                                 </div>

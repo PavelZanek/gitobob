@@ -198,3 +198,14 @@ document.addEventListener('click', async event => {
         location.assign(link.href);
     }
 });
+
+document.addEventListener('change', event => {
+    const box = event.target.closest('[data-patch-row]');
+    if (!box) return;
+    const patch = box.closest('[data-select-lines]');
+    const form = document.getElementById(patch.dataset.selectLines);
+    const rows = [...patch.querySelectorAll('[data-patch-row]:checked')].map(item => item.dataset.patchRow);
+    form.elements.lines.value = rows.join(',');
+    form.elements.lines.disabled = !rows.length;
+    form.querySelector('[data-apply-lines]').disabled = !rows.length;
+});

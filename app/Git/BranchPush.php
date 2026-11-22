@@ -167,14 +167,35 @@ final class BranchPush
             return 'Fetch stopped. Refresh and review the current branch and remote.';
         }
 
+        return $this->fetchTrackingBranch($directory, $review['remote'], $review['target'], $review['tracking']);
+    }
+
+    public function fetchFromWorkspace(string $directory, string $branch, string $upstream): string
+    {
+        $ref = trim($this->git($directory, ['symbolic-ref', '--quiet', 'HEAD'])->output());
+        if ($ref !== 'refs/heads/'.$branch) {
+            return 'The checked-out branch changed. Refresh the workspace.';
+        }
+        $mapping = $this->git($directory, ['for-each-ref', '--count=1', '--format=%(upstream:short)%09%(upstream)%09%(upstream:remotename)%09%(upstream:remoteref)', '--', $ref]);
+        [$short, $tracking, $remote, $target] = array_pad(explode("\t", rtrim($mapping->output(), "\n")), 4, '');
+        if ($short !== $upstream || $remote === '' || $remote === '.' || ! str_starts_with($target, 'refs/heads/')
+            || ! str_starts_with($tracking, 'refs/remotes/') || $this->git($directory, ['symbolic-ref', '--quiet', $tracking])->successful()) {
+            return 'The tracking branch changed or cannot be fetched. Refresh the workspace.';
+        }
+
+        return $this->fetchTrackingBranch($directory, $remote, substr($target, 11), $tracking);
+    }
+
+    private function fetchTrackingBranch(string $directory, string $remote, string $target, string $tracking): string
+    {
         try {
             $result = $this->git($directory, ['fetch', '--no-tags', '--no-prune', '--no-prune-tags', '--no-recurse-submodules',
-                '--no-write-fetch-head', '--refmap=', '--', $review['remote'], '+refs/heads/'.$review['target'].':'.$review['tracking']]);
+                '--no-write-fetch-head', '--refmap=', '--', $remote, '+refs/heads/'.$target.':'.$tracking]);
         } catch (ProcessTimedOutException) {
             return 'Fetch timed out. Refresh to check the tracking branch.';
         }
 
-        return $result->successful() ? 'Fetched '.$review['remote'].'/'.$review['target'].'.'
+        return $result->successful() ? 'Fetched '.$remote.'/'.$target.'.'
             : 'Fetch failed. Check your connection, remote branch and Git credentials.';
     }
 

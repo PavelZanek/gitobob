@@ -261,3 +261,19 @@ header .app-modes + .settings-link { margin-left: 0; }
 .thread-actions form { margin: 0; }
 .thread-actions details[open] { flex: 1 1 100%; }
 .thread-actions textarea { width: 100%; }
+
+.patch[data-select-lines] .patch-row { grid-template-columns: 24px 5ch 5ch 1fr; }
+.patch-row:has([data-patch-row]:checked) { box-shadow: inset 3px 0 var(--accent); background: var(--tag); }
+[data-patch-row] { margin: 0; vertical-align: middle; accent-color: var(--accent); }
+
+.project-picker { width: min(540px, 88vw); padding: 0 14px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--panel); box-shadow: 0 15px 55px #0004; }
+.project-picker::backdrop { background: #131b2580; }
+.project-picker .toolbar { padding-inline: 0; }
+.project-picker input { width: 100%; margin-top: 10px; padding: 9px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.project-options { max-height: 42vh; overflow: auto; }
+.project-options a { display: flex; justify-content: space-between; gap: 10px; padding: 8px; color: var(--ink); text-decoration: none; border-radius: 4px; overflow-wrap: anywhere; }
+.project-options span, .fetch-row .repository-meta { color: var(--muted); font-size: 12px; }
+.project-options .active-option, .project-options a:hover { background: var(--tag); }
+.fetch-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.fetch-row .repository-meta { margin: 0; }
+.fetch-row [data-fetch-result] { margin-left: auto; }

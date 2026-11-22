@@ -26,12 +26,25 @@ final class IndexActions
         return $content === false ? null : hash('sha256', serialize([$directory, $branch, $file, $content]));
     }
 
-    public function change(string $directory, string $id, string $section, string $version, ?int $hunk = null, ?string $patchVersion = null): string
+    /** @param list<int>|null $lines */
+    public function change(string $directory, string $id, string $section, string $version, ?int $hunk = null, ?string $patchVersion = null, ?array $lines = null): string
     {
         $status = RepositoryStatus::read($directory);
         $file = $status?->files[$id] ?? null;
         if ($file === null || ! isset($file->sections[$section]) || self::version($directory, $file, $status->branch) !== $version) {
             return 'The file changed. Review the current diff and try again.';
+        }
+        if ($lines !== null) {
+            $patch = (new FileDiff)->preview($directory, $file, $section);
+            $selected = hash('sha256', $patch) === $patchVersion && SelectedLines::available($patch, $file->sections[$section])
+                ? SelectedLines::patch($patch, $lines, $section === 'Staged') : null;
+            if ($selected === null) {
+                return 'The selected lines changed. Review the current diff.';
+            }
+            $result = Process::path($directory)->input($selected)->run(['git', 'apply', '--cached', '--unidiff-zero', '--whitespace=nowarn', '-']);
+
+            return $result->successful() ? ($section === 'Staged' ? 'Selected lines unstaged.' : 'Selected lines staged.')
+                : 'Git could not apply these lines together. Review the selection and try again.';
         }
         if ($hunk !== null) {
             $patch = (new FileDiff)->preview($directory, $file, $section);

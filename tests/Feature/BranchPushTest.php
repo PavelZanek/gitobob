@@ -214,3 +214,20 @@ it('links a diverged comparison to the exact tracking branch', function (): void
     ($this->git)(['fetch', 'origin']);
     $this->get('/repository?repo=demo')->assertSee('Compare branches')->assertSee('refs%2Fremotes%2Forigin%2Freview')->assertDontSee('Amend last commit');
 });
+
+it('fetches the chosen workspace tracking branch and reports its relation without moving HEAD or editing files', function (): void {
+    $head = ($this->git)(['rev-parse', 'HEAD']);
+    $new = ($this->git)(['commit-tree', 'HEAD^{tree}', '-p', $this->base, '-m', 'Incoming']);
+    ($this->git)(['--git-dir=../remote.git', 'fetch', $this->repo, $new.':refs/heads/review']);
+    file_put_contents($this->repo.'/notes', 'leave alone');
+    $this->get('/workspace/fetch')->assertOk()->assertSee('origin/review');
+    $catalog = $this->getJson('/workspace/catalog')->assertOk()->json();
+    expect($catalog['projects'][0]['branches'])->toContain('dev');
+    $data = ['workspace' => $catalog['workspace'], 'branch' => 'dev', 'upstream' => 'origin/review'];
+    $this->postJson('/workspace/fetch?repo=demo', ['workspace' => str_repeat('x', 64)] + $data)->assertConflict();
+    $this->postJson('/workspace/fetch?repo=demo', ['branch' => 'old-branch'] + $data)->assertJsonPath('ok', false);
+    ($this->git)(['remote', 'set-url', '--push', 'origin', '../no-push-access']);
+    $this->postJson('/workspace/fetch?repo=demo', $data)->assertOk()->assertJsonPath('ok', true)->assertJsonPath('ahead', 1)->assertJsonPath('behind', 1);
+    expect(($this->git)(['rev-parse', 'HEAD']))->toBe($head)->and(($this->git)(['rev-parse', 'origin/review']))->toBe($new)
+        ->and(file_get_contents($this->repo.'/notes'))->toBe('leave alone');
+});

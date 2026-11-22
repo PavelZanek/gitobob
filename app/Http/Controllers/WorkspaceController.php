@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Git\BranchPush;
+use App\Git\LocalBranches;
 use App\Git\RepositoryScanner;
+use App\Git\RepositoryStatus;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Native\Desktop\Dialog;
 
-final class WorkspaceController
+final class WorkspaceController extends Controller
 {
     public function index(Request $request, RepositoryScanner $scanner): View
     {
@@ -32,6 +37,53 @@ final class WorkspaceController
             'onlyChanged' => $onlyChanged,
             'tree' => $onlyChanged ? $tree?->onlyChanged() : $tree,
         ]);
+    }
+
+    public function catalog(Request $request, RepositoryScanner $scanner, LocalBranches $branches): JsonResponse
+    {
+        $root = Storage::disk('local')->get('workspace.path');
+        $rows = [];
+        if (is_string($root)) {
+            foreach ($scanner->workspaceTree($root, true)?->repositories() ?? [] as $path => $status) {
+                $relative = (string) $path;
+                $directory = $scanner->repositoryDirectory($root, $relative);
+                if ($directory !== null) {
+                    $rows[] = ['repo' => $relative, 'name' => $relative === '.' ? basename($root) : $relative, 'current' => $status->branch,
+                        'branches' => $branches->names($directory)];
+                }
+            }
+        }
+
+        return response()->json(['workspace' => hash('sha256', (string) $root), 'projects' => $rows])->header('Cache-Control', 'no-store');
+    }
+
+    public function fetchList(RepositoryScanner $scanner): View
+    {
+        $root = Storage::disk('local')->get('workspace.path');
+
+        return view('workspace-fetch', ['repositories' => is_string($root) ? $scanner->workspaceTree($root, true)?->repositories() ?? [] : [],
+            'workspace' => hash('sha256', (string) $root), 'name' => basename((string) $root)]);
+    }
+
+    public function fetchRepository(Request $request, RepositoryScanner $scanner, BranchPush $push): JsonResponse
+    {
+        $directory = $this->directory($request, $scanner);
+        $data = $request->validate(['workspace' => ['required', 'string', 'size:64'], 'branch' => ['required', 'string'], 'upstream' => ['required', 'string']]);
+        $root = Storage::disk('local')->get('workspace.path');
+        abort_unless(is_string($root) && hash('sha256', $root) === $data['workspace'] && $scanner->repositoryDirectory($root, (string) $request->query('repo')) === $directory, 409);
+        $notice = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
+            fn (): string => $push->fetchFromWorkspace($directory, $data['branch'], $data['upstream']));
+        $ok = str_starts_with($notice, 'Fetched ');
+        $status = $ok ? RepositoryStatus::read($directory, tracking: true) : null;
+        $query = $request->only('repo');
+        $url = match (true) {
+            $status === null => route('repository.push.preview', $query),
+            $status->ahead > 0 && $status->behind > 0 => route('repository.compare', $query + ['base' => $status->upstreamRef, 'head' => 'refs/heads/'.$status->branch]),
+            $status->behind > 0, $status->ahead > 0 => route('repository.push.preview', $query),
+            default => route('repository', $query),
+        };
+
+        return response()->json(['ok' => $ok, 'notice' => $notice, 'ahead' => $status?->ahead, 'behind' => $status?->behind, 'url' => $url]);
     }
 
     public function choose(): RedirectResponse

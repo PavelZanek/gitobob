@@ -28,6 +28,7 @@
                             <a data-all-changes @if ($token) aria-disabled="true" @else data-prefetch href="{{ route('changes', ['snapshot' => 1, 'changed' => $onlyChanged ?: null]) }}" @endif>All changes</a>
                         </nav>
                         <div class="actions">
+                            <a class="button-link" href="{{ route('workspace.fetch') }}">Fetch repositories…</a>
                             <a class="filter" role="switch" aria-checked="{{ $onlyChanged ? 'true' : 'false' }}"
                                href="{{ route('workspace', ['snapshot' => 1, 'changed' => $onlyChanged ? null : 1]) }}">Only changed</a>
                             <a class="button-link" href="{{ route('workspace', $onlyChanged ? ['changed' => 1] : []) }}">Refresh</a>

@@ -22,7 +22,7 @@ final class FileDiff
             if (realpath(dirname($path)) !== dirname($path) || (! is_link($path) && ! is_file($path))) {
                 return 'This file is no longer available.';
             }
-            array_push($command, '--no-index', '--', '/dev/null', './'.$file->path);
+            array_push($command, '--no-index', '--', '/dev/null', $file->path === '-' ? './-' : $file->path);
         } else {
             if ($section === 'Staged') {
                 $command[] = '--cached';

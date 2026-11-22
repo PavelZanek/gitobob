@@ -14,6 +14,14 @@ final class LocalBranches
         return Process::path($directory)->env(['LC_ALL' => 'C', 'GIT_TERMINAL_PROMPT' => '0'])->run(['git', ...$arguments]);
     }
 
+    /** @return list<string> */
+    public function names(string $directory): array
+    {
+        $refs = trim($this->git($directory, ['for-each-ref', '--format=%(refname:lstrip=2)', 'refs/heads'])->output());
+
+        return $refs === '' ? [] : explode("\n", $refs);
+    }
+
     /** @return array{current:string, branches:list<string>, version:string} */
     public function listing(string $directory): array
     {
