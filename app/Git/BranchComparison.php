@@ -103,7 +103,7 @@ final class BranchComparison
         $published = $github->branchTip($source, $head['target']);
         if ($published !== $head['oid']) {
             if ($live['current'] !== $current) {
-                return ['label' => '', 'message' => 'Switch to '.$head['name'].' to sync this branch.'];
+                return ['label' => '', 'message' => __('Switch to :branch to sync this branch.', ['branch' => $head['name']])];
             }
             $ahead = $published === null || Process::path($directory)->run(['git', 'merge-base', '--is-ancestor', $published, $head['oid']])->successful();
             $push = $ahead && ! in_array($head['target'], ['main', 'staging'], true);

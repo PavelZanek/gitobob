@@ -10,9 +10,9 @@
     $hunkIndex = -1;
 @endphp
 @if ($hasHeaders)
-    <details class="patch-headers"><summary>Patch headers</summary><pre>{{ $headers }}</pre></details>
+    <details class="patch-headers"><summary>{{ __('Patch headers') }}</summary><pre>{{ $headers }}</pre></details>
 @endif
-<div class="patch" @if ($lineAction ?? false) data-select-lines="index-{{ $section }}" @endif tabindex="0" aria-label="{{ $section }} diff">
+<div class="patch" @if ($lineAction ?? false) data-select-lines="index-{{ $section }}" @endif tabindex="0" aria-label="{{ __(':section diff', ['section' => __($section)]) }}">
     <div class="patch-lines">
         @foreach (explode("\n", $body) as $row => $line)
             @php
@@ -38,10 +38,10 @@
             <div class="patch-row {{ $kind }}" @if ($inlineReview ?? false) data-old="{{ $before }}" data-new="{{ $after }}" @endif>
                 @if ($lineAction ?? false)
                     <span class="line-gutter">@if ($kind === 'addition' || $kind === 'deletion')
-                        <input type="checkbox" data-patch-row="{{ $row }}" aria-label="Select {{ $kind === 'addition' ? 'added line '.$after : 'removed line '.$before }}">
+                        <input type="checkbox" data-patch-row="{{ $row }}" aria-label="{{ $kind === 'addition' ? __('Select added line :line', ['line' => $after]) : __('Select removed line :line', ['line' => $before]) }}">
                     @endif</span>
                 @endif
-                @if ($inlineReview ?? false)<span class="line-gutter">@if ($after !== '' || $before !== '')<button type="button" data-line="{{ $after !== '' ? $after : $before }}" data-side="{{ $after !== '' ? 'RIGHT' : 'LEFT' }}" aria-label="Comment on {{ $after !== '' ? 'new' : 'old' }} line {{ $after !== '' ? $after : $before }}" title="Add line comment">+</button>@endif</span>@endif<span class="line-number" aria-hidden="true">{{ $before }}</span><span class="line-number" aria-hidden="true">{{ $after }}</span><code>{{ $line }}@if ($kind === 'hunk' && ($hunkAction ?? false))<button class="hunk-action" form="index-{{ $section }}" name="hunk" value="{{ $hunkIndex }}">{{ $section === 'Staged' ? 'Unstage change' : 'Stage change' }}</button>@endif</code></div>
+                @if ($inlineReview ?? false)<span class="line-gutter">@if ($after !== '' || $before !== '')<button type="button" data-line="{{ $after !== '' ? $after : $before }}" data-side="{{ $after !== '' ? 'RIGHT' : 'LEFT' }}" aria-label="{{ $after !== '' ? __('Comment on new line :line', ['line' => $after]) : __('Comment on old line :line', ['line' => $before]) }}" title="{{ __('Add line comment') }}">+</button>@endif</span>@endif<span class="line-number" aria-hidden="true">{{ $before }}</span><span class="line-number" aria-hidden="true">{{ $after }}</span><code>{{ $line }}@if ($kind === 'hunk' && ($hunkAction ?? false))<button class="hunk-action" form="index-{{ $section }}" name="hunk" value="{{ $hunkIndex }}">{{ $section === 'Staged' ? __('Unstage change') : __('Stage change') }}</button>@endif</code></div>
         @endforeach
     </div>
 </div>

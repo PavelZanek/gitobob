@@ -1,3 +1,4 @@
+import { t } from './locale.js';
 import { initializePullReview } from './pull-review.js';
 
 function initializeHunks() {
@@ -18,7 +19,7 @@ function initializeHunks() {
         hunks[current].classList.remove('current-hunk');
         current = index;
         hunks[index].classList.add('current-hunk');
-        position.textContent = `Change ${index + 1} of ${hunks.length}`;
+        position.textContent = t('Change :current of :total', { current: index + 1, total: hunks.length });
         previous.disabled = index === 0;
         next.disabled = index === hunks.length - 1;
     }
@@ -70,8 +71,8 @@ function updateFileNavigation(controls, files, filter) {
     setTarget('k', before);
     setTarget('j', after);
     controls.querySelector('[data-file-position]').textContent = position >= 0
-        ? `File ${position + 1} of ${visible.length}`
-        : `${visible.length} matching ${visible.length === 1 ? 'file' : 'files'}`;
+        ? t('File :current of :total', { current: position + 1, total: visible.length })
+        : t(visible.length === 1 ? ':count matching file' : ':count matching files', { count: visible.length });
     controls.hidden = false;
 }
 
@@ -166,13 +167,13 @@ document.addEventListener('submit', event => {
     if (!event.target.matches('[data-amend-preview]') || event.defaultPrevented) return;
     const button = event.target.querySelector('button');
     button.disabled = true;
-    button.textContent = 'Verifying upstream…';
+    button.textContent = t('Verifying upstream…');
 });
 window.addEventListener('pageshow', () => {
     const button = document.querySelector('[data-amend-preview] button:disabled');
     if (button) {
         button.disabled = false;
-        button.textContent = 'Amend last commit';
+        button.textContent = t('Amend last commit');
     }
 });
 
@@ -186,7 +187,7 @@ document.addEventListener('click', async event => {
         return;
     }
     content.hidden = false;
-    content.textContent = 'Loading preview…';
+    content.textContent = t('Loading preview…');
     try {
         const response = await fetch(link.href, { cache: 'no-store' });
         const page = new DOMParser().parseFromString(await response.text(), 'text/html');

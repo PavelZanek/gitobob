@@ -187,22 +187,22 @@ final class IndexController extends Controller
     {
         $directory = $this->directory($request, $scanner);
         $data = $request->validate(['version' => ['required', 'string', 'size:64']]);
-        $notice = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
-            fn (): string => match ($operation) {
+        $result = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
+            fn (): array => match ($operation) {
                 'fetch' => $push->fetch($directory, $data['version']),
                 'pull' => $push->pull($directory, $data['version']),
                 'push' => $push->send($directory, $data['version']),
                 default => abort(404),
             });
-        if ($request->boolean('workflow') && (str_starts_with($notice, 'Pushed ') || str_starts_with($notice, 'Fast-forwarded ') || str_starts_with($notice, 'Fetched ') || $notice === 'Up to date')) {
+        if ($request->boolean('workflow') && $result['ok']) {
             $scanner->forgetWorkspace();
 
-            return to_route('repository', $request->only('repo'))->with('notice', $notice);
+            return to_route('repository', $request->only('repo'))->with('notice', $result['notice']);
         }
         if ($operation === 'pull') {
             $scanner->forgetWorkspace();
         }
 
-        return to_route('repository.push.preview', $request->only('repo', 'remote', 'comparison', 'file_back', 'tab', 'page'))->with('notice', $notice);
+        return to_route('repository.push.preview', $request->only('repo', 'remote', 'comparison', 'file_back', 'tab', 'page'))->with('notice', $result['notice']);
     }
 }

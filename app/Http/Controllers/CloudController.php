@@ -58,7 +58,7 @@ final class CloudController
                 Cache::forget($key);
             }
 
-            return response($exception->getMessage(), $exception->getCode(), ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
+            return response(__($exception->getMessage()), $exception->getCode(), ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
         }
         if ($key !== null) {
             Cache::put($key, $snapshot, now()->addDay());
@@ -234,7 +234,7 @@ final class CloudController
 
             return response()->view('pull-summary', compact('summary'))->header('Cache-Control', 'no-store');
         } catch (RuntimeException $exception) {
-            return response($exception->getMessage(), 503, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
+            return response(__($exception->getMessage()), 503, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
         }
     }
 

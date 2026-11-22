@@ -1,3 +1,4 @@
+import { t } from './locale.js';
 const batches = new Map();
 
 function batchFor(workspace) {
@@ -42,10 +43,10 @@ function displayResult(row, result, fetching) {
     if (result) {
         const date = new Date(result.at);
         time.dateTime = result.at;
-        time.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        time.title = date.toLocaleString();
+        time.textContent = date.toLocaleTimeString(document.documentElement.lang, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        time.title = date.toLocaleString(document.documentElement.lang);
     }
-    output.textContent = fetching ? 'Fetching…' : '';
+    output.textContent = fetching ? t('Fetching…') : '';
     if (fetching || !result) return;
     if (!result.ok) output.textContent = result.notice + ' ';
     if (!result.url) return;
@@ -54,10 +55,10 @@ function displayResult(row, result, fetching) {
     url.searchParams.set('from', 'workspace-fetch');
     const link = document.createElement('a');
     link.href = url.href;
-    link.textContent = 'Inspect branch';
+    link.textContent = t('Inspect branch');
     if (result.ok && result.ahead !== null) {
         link.textContent = result.ahead || result.behind
-            ? `${result.ahead} ahead · ${result.behind} behind` : 'Up to date';
+            ? t(':ahead ahead · :behind behind', result) : t('Up to date');
     }
     output.append(link);
 }
@@ -87,13 +88,13 @@ export function initializeWorkspaceFetch() {
         }
     }
     const progress = form.querySelector('[data-fetch-progress]');
-    if (batch.running) progress.textContent = `Fetching ${batch.position} of ${batch.total}…`;
-    else if (completed) progress.textContent = `Fetched ${completed - failed} of ${completed} repositories.`;
-    else progress.textContent = 'Select the repositories to fetch.';
+    if (batch.running) progress.textContent = t('Fetching :current of :total…', { current: batch.position, total: batch.total });
+    else if (completed) progress.textContent = t('Fetched :ok of :total repositories.', { ok: completed - failed, total: completed });
+    else progress.textContent = t('Select the repositories to fetch.');
     const retry = form.querySelector('[data-fetch-retry]');
     retry.hidden = !failed;
     retry.disabled = batch.running;
-    retry.textContent = `Retry failed (${failed})`;
+    retry.textContent = t('Retry failed (:count)', { count: failed });
     updateSelection(form);
 }
 
@@ -133,7 +134,7 @@ document.addEventListener('submit', async event => {
                 if (!response.ok) throw new Error();
                 result = await response.json();
             } catch {
-                result = { ok: false, notice: 'Fetch unavailable. Refresh the list and try again.' };
+                result = { ok: false, notice: t('Fetch unavailable. Refresh the list and try again.') };
             }
             batch.results.set(batch.current, { ...result, at: new Date().toISOString() });
             save(workspace, batch);

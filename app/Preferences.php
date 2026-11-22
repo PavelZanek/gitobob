@@ -8,7 +8,7 @@ final readonly class Preferences
 {
     public const int DEFAULT_DEPTH = 5;
 
-    public function __construct(public string $theme = 'system', public ?int $depth = self::DEFAULT_DEPTH) {}
+    public function __construct(public string $theme = 'system', public ?int $depth = self::DEFAULT_DEPTH, public string $language = 'en') {}
 
     public static function read(): self
     {
@@ -17,7 +17,7 @@ final readonly class Preferences
             return new self;
         }
 
-        return new self($values['theme'], $values['depth']);
+        return new self($values['theme'], $values['depth'], ($values['language'] ?? 'en') === 'cs' ? 'cs' : 'en');
     }
 
     public function save(): void

@@ -3,9 +3,10 @@
 namespace App\Providers;
 
 use App\Preferences;
+use Illuminate\Routing\Events\RouteMatched;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\View\View as Page;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,7 +23,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        View::composer(['workspace', 'workspace-fetch', 'repository', 'branches', 'compare', 'pull-compose', 'history', 'conflicts', 'stashes', 'stash-switch', 'commit', 'push', 'cloud', 'cloud-pull', 'settings'],
-            static fn (Page $page): Page => $page->with('preferences', Preferences::read()));
+        Event::listen(RouteMatched::class, function (): void {
+            $preferences = Preferences::read();
+            $this->app->setLocale($preferences->language);
+            View::share('preferences', $preferences);
+        });
     }
 }

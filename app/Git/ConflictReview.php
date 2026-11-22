@@ -25,14 +25,14 @@ final class ConflictReview
     private function blob(string $directory, string $mode, string $oid): string
     {
         if ($mode === '000000') {
-            return 'Deleted on this side.';
+            return __('Deleted on this side.');
         }
         if ($mode === '160000') {
-            return 'Submodule commit '.$oid;
+            return __('Submodule commit :id', ['id' => $oid]);
         }
         $git = Process::path($directory);
         if ((int) $git->run(['git', 'cat-file', '-s', $oid])->throw()->output() > self::PREVIEW_LIMIT) {
-            return 'Preview exceeds 256 KiB.';
+            return __('Preview exceeds 256 KiB.');
         }
 
         return $this->text($git->run(['git', 'cat-file', 'blob', $oid])->throw()->output());
@@ -41,10 +41,10 @@ final class ConflictReview
     private function text(string $content): string
     {
         if (str_contains($content, "\0") || ! mb_check_encoding($content, 'UTF-8')) {
-            return 'Binary or non-UTF-8 content.';
+            return __('Binary or non-UTF-8 content.');
         }
 
-        return $content === '' ? '(Empty file)' : $content;
+        return $content === '' ? __('(Empty file)') : $content;
     }
 
     /** @return array{content:string, editable:bool, markers:bool, version:?string} */
@@ -58,16 +58,16 @@ final class ConflictReview
             $parent = dirname($parent);
         }
         if (realpath($parent) !== $parent || is_link($path) || (file_exists($path) && ! is_file($path))) {
-            $content = 'Review this file type in Git.';
+            $content = __('Review this file type in Git.');
         } elseif (! file_exists($path)) {
-            $content = 'Deleted in the working tree. Marking this file as resolved will stage its deletion.';
+            $content = __('Deleted in the working tree. Marking this file as resolved will stage its deletion.');
             $fingerprint = 'deleted';
         } else {
             $bytes = file_get_contents($path, false, null, 0, self::PREVIEW_LIMIT + 1);
             $large = $bytes !== false && strlen($bytes) > self::PREVIEW_LIMIT;
             $content = match (true) {
-                $bytes === false => 'Could not read the working file.',
-                $large => 'Preview exceeds 256 KiB.',
+                $bytes === false => __('Could not read the working file.'),
+                $large => __('Preview exceeds 256 KiB.'),
                 default => $this->text($bytes),
             };
             if ($bytes !== false) {

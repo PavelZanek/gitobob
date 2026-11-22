@@ -68,11 +68,11 @@ final readonly class Stashes
         }
         $saved = trim($this->git($directory, ['rev-parse', '--verify', '--quiet', 'refs/stash'])->output());
         if (! $result->successful() || $saved === '' || str_contains($result->output(), 'No local changes to save')) {
-            return 'Check Stashes and the working tree before switching. '.trim($result->errorOutput());
+            return __('Check Stashes and the working tree before switching.').' '.trim($result->errorOutput());
         }
         $switch = $this->branches->change($directory, $state['branchVersion'], $target, false);
 
-        return 'Saved stash '.substr($saved, 0, 8).'. '.$switch['message'];
+        return __('Saved stash :id.', ['id' => substr($saved, 0, 8)]).' '.__($switch['message']);
     }
 
     /** @return array{files:array<string, ChangedFile>, selected:?ChangedFile, patches:array<string, string>} */
@@ -109,11 +109,11 @@ final readonly class Stashes
             return 'Apply timed out. Inspect the working tree before retrying. The stash is still saved.';
         }
         if ($result->successful()) {
-            return 'Applied stash '.substr($oid, 0, 8).'. The stash is still saved.';
+            return __('Applied stash :id. The stash is still saved.', ['id' => substr($oid, 0, 8)]);
         }
         $conflicts = trim($this->git($directory, ['diff', '--name-only', '--diff-filter=U'])->output());
         $reason = $conflicts === '' ? trim($result->errorOutput()."\n".$result->output()) : "Conflicted files:\n".$conflicts;
 
-        return "Git could not fully apply this stash. The stash is still saved.\n".$reason;
+        return __('Git could not fully apply this stash. The stash is still saved.')."\n".$reason;
     }
 }

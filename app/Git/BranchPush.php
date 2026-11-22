@@ -95,7 +95,7 @@ final class BranchPush
             $slug = GitHubClient::slug($urls);
             $review['compareUrl'] = $slug === null ? null : 'https://github.com/'.$slug.'/compare/'.rawurlencode($review['target']).'?expand=1';
 
-            return ['canPublish' => true, 'message' => 'Publish commit '.substr($head, 0, 8).' as a new branch on this remote.'] + $review;
+            return ['canPublish' => true, 'message' => __('Publish commit :commit as a new branch on this remote.', ['commit' => substr($head, 0, 8)])] + $review;
         }
         if ($upstream === '') {
             return ['message' => $protected ? $protectedMessage : 'The upstream branch no longer exists. Check its tracking settings.'] + $review;
@@ -160,68 +160,74 @@ final class BranchPush
         return ['count' => $count, 'subjects' => $subjects];
     }
 
-    public function fetch(string $directory, string $version): string
+    /** @return array{ok:bool, notice:string} */
+    public function fetch(string $directory, string $version): array
     {
         $review = $this->preview($directory);
         if (! $review['canFetch'] || ! hash_equals($review['version'], $version)) {
-            return 'Fetch stopped. Refresh and review the current branch and remote.';
+            return ['ok' => false, 'notice' => __('Fetch stopped. Refresh and review the current branch and remote.')];
         }
 
         return $this->fetchTrackingBranch($directory, $review['remote'], $review['target'], $review['tracking']);
     }
 
-    public function fetchFromWorkspace(string $directory, string $branch, string $upstream): string
+    /** @return array{ok:bool, notice:string} */
+    public function fetchFromWorkspace(string $directory, string $branch, string $upstream): array
     {
         $ref = trim($this->git($directory, ['symbolic-ref', '--quiet', 'HEAD'])->output());
         if ($ref !== 'refs/heads/'.$branch) {
-            return 'The checked-out branch changed. Refresh the workspace.';
+            return ['ok' => false, 'notice' => __('The checked-out branch changed. Refresh the workspace.')];
         }
         $mapping = $this->git($directory, ['for-each-ref', '--count=1', '--format=%(upstream:short)%09%(upstream)%09%(upstream:remotename)%09%(upstream:remoteref)', '--', $ref]);
         [$short, $tracking, $remote, $target] = array_pad(explode("\t", rtrim($mapping->output(), "\n")), 4, '');
         if ($short !== $upstream || $remote === '' || $remote === '.' || ! str_starts_with($target, 'refs/heads/')
             || ! str_starts_with($tracking, 'refs/remotes/') || $this->git($directory, ['symbolic-ref', '--quiet', $tracking])->successful()) {
-            return 'The tracking branch changed or cannot be fetched. Refresh the workspace.';
+            return ['ok' => false, 'notice' => __('The tracking branch changed or cannot be fetched. Refresh the workspace.')];
         }
 
         return $this->fetchTrackingBranch($directory, $remote, substr($target, 11), $tracking);
     }
 
-    private function fetchTrackingBranch(string $directory, string $remote, string $target, string $tracking): string
+    /** @return array{ok:bool, notice:string} */
+    private function fetchTrackingBranch(string $directory, string $remote, string $target, string $tracking): array
     {
         try {
             $result = $this->git($directory, ['fetch', '--no-tags', '--no-prune', '--no-prune-tags', '--no-recurse-submodules',
                 '--no-write-fetch-head', '--refmap=', '--', $remote, '+refs/heads/'.$target.':'.$tracking]);
         } catch (ProcessTimedOutException) {
-            return 'Fetch timed out. Refresh to check the tracking branch.';
+            return ['ok' => false, 'notice' => __('Fetch timed out. Refresh to check the tracking branch.')];
         }
 
-        return $result->successful() ? 'Fetched '.$remote.'/'.$target.'.'
-            : 'Fetch failed. Check your connection, remote branch and Git credentials.';
+        return ['ok' => $result->successful(), 'notice' => $result->successful()
+            ? __('Fetched :ref.', ['ref' => $remote.'/'.$target])
+            : __('Fetch failed. Check your connection, remote branch and Git credentials.')];
     }
 
-    public function pull(string $directory, string $version): string
+    /** @return array{ok:bool, notice:string} */
+    public function pull(string $directory, string $version): array
     {
         $review = $this->preview($directory);
         if ($review['relation'] !== 'behind' || ! hash_equals($review['version'], $version)
             || trim($this->git($directory, ['symbolic-ref', '--quiet', 'HEAD'])->output()) !== 'refs/heads/'.$review['branch']
             || trim($this->git($directory, ['rev-parse', '--verify', 'HEAD'])->output()) !== $review['head']) {
-            return 'Pull stopped. Review the updated branch comparison.';
+            return ['ok' => false, 'notice' => __('Pull stopped. Review the updated branch comparison.')];
         }
         $gitDir = trim($this->git($directory, ['rev-parse', '--absolute-git-dir'])->throw()->output());
         foreach (['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'sequencer'] as $marker) {
             if (file_exists($gitDir.'/'.$marker)) {
-                return 'Finish the current Git operation before pulling.';
+                return ['ok' => false, 'notice' => __('Finish the current Git operation before pulling.')];
             }
         }
 
         try {
             $result = $this->git($directory, ['merge', '--ff-only', '--no-squash', '--no-autostash', '--no-overwrite-ignore', '--', $review['tip']]);
         } catch (ProcessTimedOutException) {
-            return 'Pull timed out. Refresh to check the current branch.';
+            return ['ok' => false, 'notice' => __('Pull timed out. Refresh to check the current branch.')];
         }
 
-        return $result->successful() ? 'Fast-forwarded '.$review['branch'].' to '.substr($review['tip'], 0, 8).'.'
-            : 'Git could not fast-forward. Check for overlapping local changes or a Git operation in progress.';
+        return ['ok' => $result->successful(), 'notice' => $result->successful()
+            ? __('Fast-forwarded :branch to :commit.', ['branch' => $review['branch'], 'commit' => substr($review['tip'], 0, 8)])
+            : __('Git could not fast-forward. Check for overlapping local changes or a Git operation in progress.')];
     }
 
     private function displayDestination(string $url): string
@@ -260,29 +266,30 @@ final class BranchPush
         $mapped = $mapping === '' || $this->git($directory, ['config', '--add', $config, $mapping])->successful();
         $tracked = $mapped && $this->git($directory, ['branch', '--set-upstream-to='.$review['tracking'], '--', $review['branch']])->successful();
 
-        return ['compareUrl' => $review['compareUrl'], 'notice' => $tracked ? 'Published '.$upstream.' and set it as the upstream.'
-            : 'Published '.$upstream.'. Check the remote fetch mapping and set the upstream in Git.'];
+        return ['compareUrl' => $review['compareUrl'], 'notice' => $tracked ? __('Published :ref and set it as the upstream.', ['ref' => $upstream])
+            : __('Published :ref. Check the remote fetch mapping and set the upstream in Git.', ['ref' => $upstream])];
     }
 
-    public function send(string $directory, string $version): string
+    /** @return array{ok:bool, notice:string} */
+    public function send(string $directory, string $version): array
     {
         $review = $this->preview($directory);
         if ($review['message'] === 'Up to date') {
-            return 'Up to date';
+            return ['ok' => true, 'notice' => __('Up to date')];
         }
         if (! $review['canPush'] || ! hash_equals($review['version'], $version)) {
-            return 'Push stopped. The branch or destination changed since your preview.';
+            return ['ok' => false, 'notice' => __('Push stopped. The branch or destination changed since your preview.')];
         }
 
         try {
             $result = $this->git($directory, ['push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no',
                 '--', $review['remote'], $review['head'].':refs/heads/'.$review['target']]);
         } catch (ProcessTimedOutException) {
-            return 'Push timed out. Refresh to check whether the remote received your commits.';
+            return ['ok' => false, 'notice' => __('Push timed out. Refresh to check whether the remote received your commits.')];
         }
 
-        return $result->successful()
-            ? 'Pushed '.substr($review['head'], 0, 8).' to '.$review['remote'].'/'.$review['target'].'.'
-            : 'Git rejected the push. Check the remote branch, permissions and pre-push hooks.';
+        return ['ok' => $result->successful(), 'notice' => $result->successful()
+            ? __('Pushed :commit to :ref.', ['commit' => substr($review['head'], 0, 8), 'ref' => $review['remote'].'/'.$review['target']])
+            : __('Git rejected the push. Check the remote branch, permissions and pre-push hooks.')];
     }
 }

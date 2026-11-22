@@ -231,3 +231,10 @@ it('fetches the chosen workspace tracking branch and reports its relation withou
     expect(($this->git)(['rev-parse', 'HEAD']))->toBe($head)->and(($this->git)(['rev-parse', 'origin/review']))->toBe($new)
         ->and(file_get_contents($this->repo.'/notes'))->toBe('leave alone');
 });
+
+it('reports workspace fetch success independently of the language of its notice', function (): void {
+    $this->post('/settings', ['theme' => 'system', 'depth' => 5, 'language' => 'cs']);
+    $workspace = $this->getJson('/workspace/catalog')->json('workspace');
+    $this->postJson('/workspace/fetch?repo=demo', ['workspace' => $workspace, 'branch' => 'dev', 'upstream' => 'origin/review'])
+        ->assertOk()->assertJsonPath('ok', true)->assertJsonPath('notice', 'Načteny změny z origin/review.');
+});

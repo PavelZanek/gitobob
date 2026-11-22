@@ -1,8 +1,9 @@
+import { t } from './locale.js';
 async function loadSummary(panel) {
     const label = panel.querySelector('[data-summary-label]');
     try {
         const response = await fetch(panel.dataset.reviewSummary, { cache: 'no-store' });
-        if (!response.ok) throw new Error(response.status === 503 ? await response.text() : 'Review status unavailable. Refresh to retry.');
+        if (!response.ok) throw new Error(response.status === 503 ? await response.text() : t('Review status unavailable. Refresh to retry.'));
         const html = new DOMParser().parseFromString(await response.text(), 'text/html');
         label.textContent = html.querySelector('[data-result-label]').textContent;
         panel.querySelector('[data-summary-details]').replaceChildren(html.querySelector('[data-result-details]'));
@@ -16,18 +17,18 @@ function threadForm(nav, thread, operation) {
     form.elements.thread.value = thread.id;
     form.elements.submission.value = crypto.randomUUID();
     form.elements.operation.value = operation;
-    form.querySelector('button').textContent = operation === 'resolve' ? 'Resolve conversation' : 'Post reply';
+    form.querySelector('button').textContent = operation === 'resolve' ? t('Resolve conversation') : t('Post reply');
     if (operation === 'resolve') return form;
     const field = document.createElement('textarea');
     field.name = 'body';
     field.required = true;
     field.maxLength = 65536;
     field.rows = 2;
-    field.setAttribute('aria-label', 'Reply to conversation');
+    field.setAttribute('aria-label', t('Reply to conversation'));
     form.prepend(field);
     const details = document.createElement('details');
     const summary = document.createElement('summary');
-    summary.textContent = 'Reply';
+    summary.textContent = t('Reply');
     details.append(summary, form);
     return details;
 }
@@ -36,11 +37,11 @@ async function loadThreads(nav) {
     const status = nav.querySelector('[data-thread-count]');
     try {
         const response = await fetch(nav.dataset.url, { cache: 'no-store' });
-        if (!response.ok) throw new Error(response.status === 409 ? 'The diff changed. Refresh to see conversations.' : 'Conversations unavailable. Refresh to retry.');
+        if (!response.ok) throw new Error(response.status === 409 ? t('The diff changed. Refresh to see conversations.') : t('Conversations unavailable. Refresh to retry.'));
         const { threads, comments } = await response.json();
         if (!nav.isConnected) return;
         const open = threads.filter(thread => !thread.isResolved);
-        status.textContent = open.length + ' unresolved ' + (open.length === 1 ? 'conversation' : 'conversations');
+        status.textContent = t(open.length === 1 ? ':count unresolved conversation' : ':count unresolved conversations', { count: open.length });
         const active = nav.dataset.thread;
         const next = nav.querySelector('[data-next-thread]');
         if (open.length) {
@@ -59,11 +60,11 @@ async function loadThreads(nav) {
             card.className = 'line-thread';
             const heading = document.createElement('strong');
             heading.className = 'thread-state';
-            heading.textContent = [thread.isResolved ? 'Resolved' : 'Open conversation', row ? null : thread.path, thread.isOutdated ? 'Outdated' : null].filter(Boolean).join(' · ');
+            heading.textContent = [thread.isResolved ? t('Resolved') : t('Open conversation'), row ? null : thread.path, thread.isOutdated ? t('Outdated') : null].filter(Boolean).join(' · ');
             card.append(heading);
             for (const entry of [{ author: root.author?.login, body: root.body }, ...comments.filter(c => c.parent === root.databaseId)]) {
                 const author = document.createElement('strong');
-                author.textContent = entry.author ?? 'Deleted account';
+                author.textContent = entry.author ?? t('Deleted account');
                 const body = document.createElement('p');
                 body.textContent = entry.body;
                 card.append(author, body);
@@ -142,7 +143,7 @@ document.addEventListener('submit', event => {
     }
     form.setAttribute('aria-busy', 'true');
     const button = form.querySelector('button');
-    button.textContent = 'Sending…';
+    button.textContent = t('Sending…');
     button.disabled = true;
 });
 window.addEventListener('pageshow', event => {

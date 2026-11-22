@@ -30,9 +30,9 @@ final class StagedCommit
             throw new RuntimeException('Amend requires a reachable upstream branch.');
         }
         if ($fetch) {
-            $notice = $push->fetch($directory, $remote['version']);
-            if (! str_starts_with($notice, 'Fetched ')) {
-                throw new RuntimeException($notice);
+            $result = $push->fetch($directory, $remote['version']);
+            if (! $result['ok']) {
+                throw new RuntimeException($result['notice']);
             }
             $remote = $push->preview($directory);
         }

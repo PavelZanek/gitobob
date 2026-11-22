@@ -96,7 +96,7 @@ final class RepositoryController
         }
 
         $response = response()->view('repository', [
-            'name' => $allChanges ? 'All changes' : (basename($relative === '.' ? $root : $relative) ?: '/'),
+            'name' => $allChanges ? __('All changes') : (basename($relative === '.' ? $root : $relative) ?: '/'),
             'rootName' => basename($root) ?: '/', 'relative' => $relative, 'repositories' => $repositories,
             'workspaceKey' => hash('sha256', $root), 'allChanges' => $allChanges, 'total' => array_sum(array_column($repositories, 'changedFiles')),
             'grouped' => $grouped, 'groups' => $groups, 'fileId' => $fileId, 'selected' => $selected,

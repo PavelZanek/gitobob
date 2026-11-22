@@ -1,3 +1,4 @@
+import { t } from './locale.js';
 let activeCloudRequest;
 
 export function initializeCloud() {
@@ -22,7 +23,7 @@ export function initializeCloud() {
         if (empty) empty.hidden = matches > 0;
     }
     filter?.addEventListener('input', filterRepositories);
-    const formatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    const formatter = new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: 'medium', timeStyle: 'short' });
     function formatTimes() {
         for (const time of content.querySelectorAll('time')) {
             time.textContent = formatter.format(new Date(time.dateTime));
@@ -33,7 +34,7 @@ export function initializeCloud() {
         const controller = new AbortController();
         activeCloudRequest = controller;
         notice.hidden = false;
-        notice.textContent = 'Updating from GitHub…';
+        notice.textContent = t('Updating from GitHub…');
         refresh.disabled = true;
         try {
             const response = await fetch(view.dataset.cloudUrl, { signal: controller.signal, cache: 'no-store' });
@@ -42,7 +43,7 @@ export function initializeCloud() {
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) content.replaceChildren();
                 notice.textContent = response.headers.get('Content-Type')?.startsWith('text/plain')
-                    ? body : 'Could not load GitHub data. Try refreshing.';
+                    ? body : t('Could not load GitHub data. Try refreshing.');
                 return;
             }
             content.innerHTML = body;
@@ -50,7 +51,7 @@ export function initializeCloud() {
             filterRepositories();
             notice.hidden = true;
         } catch {
-            if (!controller.signal.aborted) notice.textContent = 'Could not load GitHub data. Try refreshing.';
+            if (!controller.signal.aborted) notice.textContent = t('Could not load GitHub data. Try refreshing.');
         } finally {
             if (!controller.signal.aborted) refresh.disabled = false;
         }

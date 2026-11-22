@@ -172,3 +172,14 @@ it('discovers repositories in their final visible order across scan batches', fu
     $this->get('/?snapshot=1')->assertSee('4 found');
     expect($read)->toBe($order);
 });
+
+it('uses English for existing preferences and persists the selected interface language', function (): void {
+    Storage::disk('local')->put('preferences.json', '{"theme":"dark","depth":3}');
+    $this->get('/settings')->assertSee('lang="en"', false)->assertSee('Save settings');
+    $this->post('/settings', ['theme' => 'dark', 'depth' => 3, 'language' => 'cs'])->assertRedirect('/settings');
+    $this->get('/settings')->assertSee('lang="cs"', false)->assertSee('Uložit nastavení')->assertSee('Nastavení bylo uloženo.');
+    $this->get('/')->assertSee('Vyberte složku pracovního prostoru');
+    $this->post('/settings', ['theme' => 'dark', 'depth' => 3, 'language' => 'de'])->assertSessionHasErrors('language');
+    $this->post('/settings', ['theme' => 'dark', 'depth' => 3, 'language' => 'en'])->assertRedirect('/settings');
+    $this->get('/settings')->assertSee('Save settings')->assertSee('data-theme="dark"', false);
+});

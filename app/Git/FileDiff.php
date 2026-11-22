@@ -20,7 +20,7 @@ final class FileDiff
         if ($section === 'Untracked') {
             $path = $directory.'/'.$file->path;
             if (realpath(dirname($path)) !== dirname($path) || (! is_link($path) && ! is_file($path))) {
-                return 'This file is no longer available.';
+                return __('This file is no longer available.');
             }
             array_push($command, '--no-index', '--', '/dev/null', $file->path === '-' ? './-' : $file->path);
         } else {
@@ -68,13 +68,13 @@ final class FileDiff
                 $preview .= $chunk;
             }
         } catch (ProcessTimedOutException) {
-            return 'Git took too long to generate this diff.';
+            return __('Git took too long to generate this diff.');
         }
 
         if (! $process->isSuccessful() && ! ($noIndex && $process->getExitCode() === 1)) {
-            return 'Git could not read this diff. Refresh the repository to check its current state.';
+            return __('Git could not read this diff. Refresh the repository to check its current state.');
         }
 
-        return $preview === '' ? 'No text changes to display.' : $preview;
+        return $preview === '' ? __('No text changes to display.') : $preview;
     }
 }

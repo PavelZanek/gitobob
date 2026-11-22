@@ -1,3 +1,4 @@
+import { t } from './locale.js';
 import { initializeWorkspaceFetch } from './workspace-fetch.js';
 import { initializeProjectPicker } from './project-picker.js';
 import { enableFocusRefresh } from './focus-refresh.js';
@@ -67,10 +68,10 @@ async function scanWorkspace() {
     } catch {
         if (controller.signal.aborted || !results.isConnected) return;
         const message = results.querySelector('.scan-status');
-        message.textContent = 'Workspace scan interrupted. ';
+        message.textContent = t('Workspace scan interrupted. ');
         const retry = document.createElement('a');
         retry.href = '/';
-        retry.textContent = 'Scan again';
+        retry.textContent = t('Scan again');
         message.append(retry);
     }
 }
@@ -91,7 +92,7 @@ function indicateLoading() {
     const main = document.querySelector('main');
     main.setAttribute('aria-busy', 'true');
     document.body.classList.add('navigating');
-    statusMessage.textContent = 'Loading…';
+    statusMessage.textContent = t('Loading…');
     skeletonTimer = setTimeout(() => {
         const panel = main.querySelector('.panel, .empty');
         if (!panel) return;
@@ -311,7 +312,7 @@ document.addEventListener('submit', event => {
     }
     if (event.submitter?.value !== 'create') return;
     form.setAttribute('aria-busy', 'true');
-    form.parentElement.querySelector('[data-compose-status]').textContent = 'Creating pull request…';
+    form.parentElement.querySelector('[data-compose-status]').textContent = t('Creating pull request…');
     // Disable the controls only after the browser has collected their values, including the clicked button.
     form.addEventListener('formdata', () => {
         for (const control of form.elements) control.disabled = true;

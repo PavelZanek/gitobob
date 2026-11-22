@@ -165,3 +165,11 @@ it('refreshes the selected working diff and advances when it leaves the change l
     unlink($this->repo.'/c');
     $this->get($url, $headers)->assertSee('This repository is clean.')->assertDontSee('aria-label="File diff"', false);
 });
+
+it('translates review controls while preserving Git paths, patch content and section identifiers', function (): void {
+    $this->post('/settings', ['theme' => 'system', 'depth' => 5, 'language' => 'cs']);
+    file_put_contents($this->repo.'/Settings', "Workspace\n");
+    $this->get('/repository?repo=client&file='.hash('sha256', 'Settings'))
+        ->assertOk()->assertSee('Rozdíly v souboru')->assertSee('Nesledované')->assertSee('Připravit soubor')
+        ->assertSee('value="Untracked"', false)->assertSee('+Workspace')->assertSee('>Settings</', false);
+});

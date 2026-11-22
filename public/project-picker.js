@@ -1,3 +1,4 @@
+import { t } from './locale.js';
 const dialog = document.querySelector('[data-project-picker]');
 const input = dialog.querySelector('[data-project-search]');
 const options = dialog.querySelector('[data-project-options]');
@@ -38,8 +39,8 @@ export function initializeProjectPicker() {
         const button = document.createElement('button');
         button.type = 'button';
         button.dataset.openPicker = '';
-        button.setAttribute('aria-label', 'Go to project or branch');
-        button.textContent = 'Go to… ⌘K';
+        button.setAttribute('aria-label', t('Go to project or branch'));
+        button.textContent = t('Go to… ⌘K');
         const header = document.querySelector('header');
         header.insertBefore(button, header.querySelector('.settings-link'));
     }
@@ -89,7 +90,7 @@ function render() {
                 const url = new URL(dialog.dataset.branchesUrl);
                 url.searchParams.set('repo', project.repo);
                 url.searchParams.set('find', branch);
-                matches.push({ label: branch, detail: project.name + ' · Local branch', url });
+                matches.push({ label: branch, detail: project.name + t(' · Local branch'), url });
             }
         }
     }
@@ -104,7 +105,7 @@ function render() {
         link.append(title, detail);
         options.append(link);
     }
-    status.textContent = request ? 'Loading workspace…' : (matches.length ? (matches.length > 80 ? 'Showing the first 80 matches' : (text ? matches.length + (matches.length === 1 ? ' match' : ' matches') : 'Recent projects first')) : 'No projects or branches found.');
+    status.textContent = request ? t('Loading workspace…') : (matches.length ? (matches.length > 80 ? t('Showing the first 80 matches') : (text ? matches.length + (matches.length === 1 ? t(' match') : t(' matches')) : t('Recent projects first'))) : t('No projects or branches found.'));
     highlight(0, false);
 }
 
@@ -127,7 +128,7 @@ async function openPicker() {
         catalog = data.projects;
         dialog.dataset.workspace = loadedScope;
     } catch {
-        if (!controller.signal.aborted) status.textContent = 'Could not load the workspace. Reopen to retry.';
+        if (!controller.signal.aborted) status.textContent = t('Could not load the workspace. Reopen to retry.');
         return;
     } finally {
         if (request === controller) request = null;

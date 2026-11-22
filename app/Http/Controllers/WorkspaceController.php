@@ -71,9 +71,9 @@ final class WorkspaceController extends Controller
         $data = $request->validate(['workspace' => ['required', 'string', 'size:64'], 'branch' => ['required', 'string'], 'upstream' => ['required', 'string']]);
         $root = Storage::disk('local')->get('workspace.path');
         abort_unless(is_string($root) && hash('sha256', $root) === $data['workspace'] && $scanner->repositoryDirectory($root, (string) $request->query('repo')) === $directory, 409);
-        $notice = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
-            fn (): string => $push->fetchFromWorkspace($directory, $data['branch'], $data['upstream']));
-        $ok = str_starts_with($notice, 'Fetched ');
+        $result = Cache::lock('index:'.hash('sha256', $directory), 120)->block(5,
+            fn (): array => $push->fetchFromWorkspace($directory, $data['branch'], $data['upstream']));
+        $ok = $result['ok'];
         $status = $ok ? RepositoryStatus::read($directory, tracking: true) : null;
         $query = $request->only('repo');
         $url = match (true) {
@@ -83,12 +83,12 @@ final class WorkspaceController extends Controller
             default => route('repository', $query),
         };
 
-        return response()->json(['ok' => $ok, 'notice' => $notice, 'ahead' => $status?->ahead, 'behind' => $status?->behind, 'url' => $url]);
+        return response()->json(['ok' => $ok, 'notice' => $result['notice'], 'ahead' => $status?->ahead, 'behind' => $status?->behind, 'url' => $url]);
     }
 
     public function choose(): RedirectResponse
     {
-        $path = Dialog::new()->folders()->title('Choose a workspace folder')->button('Choose folder')->open();
+        $path = Dialog::new()->folders()->title(__('Choose a workspace folder'))->button(__('Choose folder'))->open();
         if (is_string($path) && is_dir($path)) {
             Storage::disk('local')->put('workspace.path', $path);
 

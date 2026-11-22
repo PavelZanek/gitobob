@@ -64,6 +64,6 @@ final class LocalBranches
             return ['ok' => false, 'message' => trim($result->errorOutput()) ?: 'Git could not switch branches.'];
         }
 
-        return ['ok' => true, 'message' => ($create ? 'Created and switched to ' : 'Switched to ').$name.'.'];
+        return ['ok' => true, 'message' => __($create ? 'Created and switched to :branch.' : 'Switched to :branch.', ['branch' => $name])];
     }
 }
