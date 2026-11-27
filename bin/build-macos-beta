@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Build a local Apple Silicon DMG from committed source on macOS."""
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("output_directory", type=Path)
+    args = parser.parse_args()
+    if os.uname().sysname != "Darwin" or os.uname().machine != "arm64":
+        parser.error("Run this build on an Apple Silicon Mac.")
+
+    root = Path(__file__).resolve().parents[1]
+    with tempfile.TemporaryDirectory(prefix="gitobob-build-") as tmp:
+        stage = Path(tmp) / "source"
+        stage.mkdir()
+        archive = Path(tmp) / "source.tar"
+        subprocess.run(["git", "archive", "HEAD", "-o", str(archive)], cwd=root, check=True)
+        subprocess.run(["tar", "-xf", str(archive)], cwd=stage, check=True)
+
+        # Start with public defaults. Never copy the developer's .env or database.
+        example = (stage / ".env.example").read_text().splitlines()
+        settings = dict(line.split("=", 1) for line in example if "=" in line)
+        settings.pop("APP_KEY", None)
+        settings.update(APP_ENV="production", APP_DEBUG="false",
+                        NATIVEPHP_APP_AUTHOR='"Pavel Zaněk"', NATIVEPHP_APP_WEBSITE="https://gitobob.com",
+                        NATIVEPHP_REPOSITORY_URL="https://github.com/PavelZanek/gitobob",
+                        NATIVEPHP_UPDATER_ENABLED="false")
+        (stage / ".env").write_text("".join(f"{key}={value}\n" for key, value in settings.items()))
+        subprocess.run(["composer", "install", "--no-dev", "--prefer-dist", "--no-interaction"], cwd=stage, check=True)
+
+        # NativePHP reads APP_KEY in both Electron and its local PHP processes.
+        # Use a fresh session key on launch. Preferences are stored independently.
+        entry = stage / "vendor/nativephp/desktop/resources/electron/src/main/index.js"
+        entry.write_text("import { randomBytes } from 'node:crypto';\n"
+                         "process.env.APP_KEY = 'base64:' + randomBytes(32).toString('base64');\n"
+                         + entry.read_text())
+        # Request an ad-hoc signature explicitly, including Electron's helpers.
+        # This mode has no Apple-issued team identity for library validation.
+        builder = stage / "vendor/nativephp/desktop/resources/electron/electron-builder.mjs"
+        original = builder.with_name("electron-builder-native.mjs")
+        builder.rename(original)
+        builder.write_text("import config from './electron-builder-native.mjs';\n"
+                           "export default { ...config, mac: { ...config.mac, identity: '-', hardenedRuntime: false } };\n")
+        env = dict(os.environ, CSC_IDENTITY_AUTO_DISCOVERY="false")
+        subprocess.run(["php", "artisan", "native:build", "mac", "arm64", "--no-interaction"], cwd=stage, env=env, check=True)
+        dmg = stage / "nativephp/electron/dist" / f"GitoBob-{settings['NATIVEPHP_APP_VERSION']}-arm64.dmg"
+        subprocess.run(["codesign", "--verify", "--deep", "--strict", str(dmg.parent / "mac-arm64/GitoBob.app")], check=True)
+        subprocess.run(["hdiutil", "verify", str(dmg)], check=True)
+        args.output_directory.mkdir(parents=True, exist_ok=True)
+        print(shutil.copy2(dmg, args.output_directory))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,12 @@
 {
+    "Updates": "Aktualizace",
+    "Installed version": "Nainstalovaná verze",
+    "Check for updates": "Zkontrolovat aktualizace",
+    "Could not check GitHub. Try again later.": "GitHub se nepodařilo zkontrolovat. Zkus to později.",
+    "No releases have been published yet.": "Zatím nevyšla žádná verze ke stažení.",
+    "No newer release is available.": "Novější verze není k dispozici.",
+    "New version available": "Je k dispozici nová verze",
+    "View release on GitHub": "Otevřít vydání na GitHubu",
     "(Empty file)": "(Prázdný soubor)",
     "(No subject)": "(Bez předmětu)",
     ":ahead ahead · :behind behind": ":ahead napřed · :behind pozadu",

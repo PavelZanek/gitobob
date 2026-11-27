@@ -42,6 +42,24 @@
             <button>{{ __('Save settings') }}</button>
         </form>
     </section>
+    <section class="panel settings-panel settings-form" id="updates" aria-labelledby="updates-title">
+        <h2 id="updates-title">{{ __('Updates') }}</h2>
+        <span>{{ __('Installed version') }} · {{ config('nativephp.version') }}</span>
+        <form method="post" action="{{ route('settings.updates') }}">
+            @csrf
+            <button>{{ __('Check for updates') }}</button>
+        </form>
+        @if (session('releaseTag'))
+            <p role="status">{{ __('New version available') }} · {{ session('releaseTag') }}</p>
+            <form method="post" action="{{ route('settings.release') }}">
+                @csrf
+                <input type="hidden" name="tag" value="{{ session('releaseTag') }}">
+                <button>{{ __('View release on GitHub') }}</button>
+            </form>
+        @elseif (session('updateStatus'))
+            <p role="status">{{ __(session('updateStatus')) }}</p>
+        @endif
+    </section>
 </main>
 @include('loading')
 </body>
